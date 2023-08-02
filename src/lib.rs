@@ -1,5 +1,5 @@
 #[path = "system/system.rs"] mod system;
-#[path = "system/encrypt.rs"] mod encrypt;
+#[path = "system/encrypt.rs"] pub mod encrypt;
 #[path = "system/secrets.rs"] mod secret;
 #[path = "system/config.rs"] mod config;
 #[path = "auth.rs"] mod auth;
