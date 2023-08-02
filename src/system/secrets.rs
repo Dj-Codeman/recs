@@ -4,12 +4,12 @@ use serde::{Serialize, Deserialize};
 use std::{
     io::{Write, SeekFrom, prelude::*}, 
     fs::{metadata, OpenOptions, File, canonicalize, read_to_string}, 
-    path::Path
+    path::Path, process::exit
 };
 
 // self and create are user made code
 use crate::{
-    system::{halt, truncate, warn, notice, output, append_log, VERSION}, 
+    system::{truncate, append_log, VERSION}, 
     encrypt::{encrypt, decrypt, create_hash},
     config::{SECRET_MAP_DIRECTORY, DATA_DIRECTORY, SOFT_MOVE_FILES, LEAVE_IN_PEACE,},
     auth::{fetch_chunk, array_arimitics, create_writing_key},
@@ -44,7 +44,6 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
         fit_buffer / 4
     };
 
-    output("GREEN", "Creating new secret \n");
     let mut msg: String = String::new();
     msg.push_str("Attempting to encrypt '");
     msg.push_str(&filename);
@@ -129,9 +128,12 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
             Ok(_) => append_log("new secret file created"),
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 append_log("secret file id already exists");
-                halt("Error while writing please check log");
+                eprintln!("Error while writing please check log");
             },
-            Err(_) => halt("An error occoured"),
+            Err(_) => { 
+                eprintln!("An error occoured");
+                exit(1);
+            }
         }
 
         // ! reading the chunks 
@@ -167,7 +169,8 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
                     // ! THIS IS WHERER THE FILE WAS OPENED
                 
                     if let Err(_) = write!(secret_file.as_mut().expect("Something went wrong"), "{}", processed_chunk) {
-                        halt(&"Could't write the encrypted data");
+                        eprintln!("Could't write the encrypted data");
+                        exit(1)
                     }
 
                     // * DONE RUN THE NEXT CHUNK */
@@ -201,13 +204,18 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 std::fs::remove_file(secret_path).unwrap();
                 append_log("The json associated with this file id already exists. Nothing has been deleted.");
-                halt("Please check log");
+                eprintln!("An error occoured while creating maps check logs");
+                exit(1);
             },
-            Err(_) => halt(""),
+            Err(_) => {
+                eprintln!("An error occoured while creating maps");
+                exit(1);
+            }
         }
 
         if let Err(_) = write!(secret_map_file.as_mut().expect("Something went wrong"), "{}", cipher_data_map) {
-            halt(&"Could't write the encrypted data");
+            eprintln!("An error occoured check log");
+            append_log(&"Could't write the encrypted data");
         }
     
         // after everything has been written we can delete the file 
@@ -217,8 +225,12 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
         return true
 
     } else {
-        notice(&filename);
-        warn("File doesn't exist");
+        let mut msg = String::new();
+        msg.push_str("Warning");
+        msg.push_str(&filename);
+        msg.push_str("Does not exist");
+        append_log(&msg);
+        eprintln!("{}", &msg);
         return false;
     }
 }
@@ -242,12 +254,14 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
 
         // ! Validating that we can mess with this data
         if secret_map.version != VERSION {
-            warn("Warning, The version of encore used to write this is out of date");
+            eprintln!("Older version of map data. Fucking around and finding out anyway");
+            append_log("Data from and older version of recs attempting to read anyway");
         }
 
         // ensure the data is there
         if !std::path::Path::new(&secret_map.secret_path).exists() {
-            halt("THE DATA FILE SPECIFIED DOES NOT EXIST");
+            eprintln!("An error occoured check logs");
+            append_log("THE DATA FILE SPECIFIED DOES NOT EXIST");
         }
     
         // generating the secret key for the file
@@ -274,7 +288,11 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
 
         // * checking if its safe to make the file
         let is_file: bool = std::path::Path::new(&secret_map.file_path).exists();
-        if is_file == true { halt("The file requested already exists"); }
+        if is_file == true { 
+            eprintln!("An error occoured but a good one, check logs");
+            append_log("The file requested already exists"); 
+            exit(0);
+        }
         
         let mut plain_file = OpenOptions::new()
         .create_new(true)
@@ -314,7 +332,10 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     break;
                 }
-                Err(_e) => halt("add the break con back here"),
+                Err(e) => { 
+                    eprintln!("An error has occoured check logs");
+                    append_log(&e.to_string())
+                }
             }
 
             // ! After 9 chuncks an HMAC error is thrown because the sig size is not updated
@@ -323,21 +344,23 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
 
             let sig_version = truncate(&signature[2..], 6);
             if sig_version != VERSION {
-                output("RED", "The signature indicates that a diffrent version of encore was used for this file");
-                warn("Will try to proceed, older version of encore may be needed");
+                eprintln!("An error occoured while reading data, check logs");
+                append_log("The signature data indicates an older version of recs or encore was used to write this.");
+                append_log("I'll try to read this data but if a can't get an older version or recs or encore and try again");
             }
 
             let sig_hash = truncate(&signature[9..], 20);
             if truncate(&create_hash(&encoded_buffer), 20).to_string() != sig_hash {
+                eprintln!("Something went really wrong, get some coffee or a drink and check the logs");
                 append_log("A chunk had an invalid has signature");
-                append_log("check the debug help for a potential solution");
-                halt("STREAM INTEGRITY CHECK FAILED");
+                append_log("an option will be in a cli tool to ignore checks in an emergency");
+                exit(1);
             }
 
             let sig_count_data = &signature[30..];
             let sig_count = sig_count_data.parse::<usize>().unwrap();
             if sig_count != signature_count {
-                halt("Signature count is mis-aligned");
+                append_log("Making note: while decrypting the signature counts are mis-aligned foul-play or bad code");
             }
             
             // ? unencoding buffer
@@ -345,7 +368,7 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
 
             // ? appending on decode
             match plain_file.write_all(&plain_result){
-                Ok(_) => output("BLUE", "."),
+                Ok(_) => (),
                 Err(_) => panic!("Error while writing to file"),
             }
 
@@ -360,7 +383,8 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
         return true;
 
     }  else {
-        warn("The secret map doen't exist");
+        eprintln!("The map requested can't be found");
+        append_log("The secret map doen't exist");
         return false;
     }   
 }
@@ -383,7 +407,7 @@ pub fn forget(secret_owner: String, secret_name: String) -> bool {
         let secret_map: SecretDataIndex = serde_json::from_str(&secret_map_data).unwrap();
         // the config 
         if LEAVE_IN_PEACE {
-            if read(secret_owner, secret_name) { warn("File read before deleting"); }
+            read(secret_owner, secret_name);
             
             // deleted secret data 
             if std::path::Path::new(&secret_map.secret_path).exists() {

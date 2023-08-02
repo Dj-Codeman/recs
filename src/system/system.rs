@@ -1,100 +1,26 @@
 use chrono::{Datelike, DateTime, Timelike, Local};
-use std::{io::Write, fs::OpenOptions, str};
+use std::{io::Write, fs::OpenOptions, str, process::exit};
 use crate::config::LOG_FILE_LOCATION;
 
 // Defining terminal colors
-const COLOR_BLACK:  &str = "\u{001b}[30m"; // Terminals are black why output black ???
-const COLOR_RED:    &str = "\u{001b}[31m";
-const COLOR_GREEN:  &str = "\u{001b}[32m";
-const COLOR_YELLOW: &str = "\u{001b}[33m";
-const COLOR_BLUE:   &str = "\u{001b}[34m";
-const COLOR_BOLD:   &str = "\x1B[1m";
-const COLOR_RESET:  &str = "\u{001b}[0m";
+// const COLOR_YELLOW: &str = "\u{001b}[33m";
+// const COLOR_BOLD:   &str = "\x1B[1m";
+// const COLOR_RESET:  &str = "\u{001b}[0m";
 
 // Defining version number
-pub const VERSION: &str = "R1.1.1";
+pub const VERSION: &str = "R1.0.0";
 
 // Defining static content
-pub const HELP: &str = "\nencore [--write] encrypt new object [--read] decrypt object [--forget] delete a stored object 
-\nencore [--test] system tests (for important builds) [--initialize] recreates keys and deletes data
-\nencore [--version] Prints the current version of encore.
-\nFor more help try encore --help --write or encore --help --read !!!\n";
-
-pub fn output(color: &str, text: &str) {
-
-    match color {
-        "RED" => {
-            let color: &str = COLOR_RED;
-            print_text(color, &text);
-        }
-        "GREEN" => {
-            let color: &str = COLOR_GREEN;
-            print_text(color, &text);
-        }
-        "YELLOW" => {
-            let color: &str = COLOR_YELLOW;
-            print_text(color, &text);
-        }
-        "BLUE" => {
-            let color: &str = COLOR_BLUE;
-            print_text(color, &text);        
-        }
-        _ => {
-            let color: &str = COLOR_BLACK;
-            print_text(color, &text);
-        }
-    }
-
-    fn print_text(_color: &str, _text: &str) {
-        // print!("{}{}{}{}", COLOR_BOLD, color, text, COLOR_RESET);
-        // Need to remove refrences
-
-    }
-}
-
-pub fn pass(text: &str) {
-    println!("{}{}{}! {}", COLOR_BOLD, COLOR_GREEN, text, COLOR_RESET);
-    std::process::exit(0);
-}
-
-pub fn notice(text: &str) {
-    println!("{}{}Notice: {}! {}", COLOR_BOLD, COLOR_BLUE, text, COLOR_RESET);
-}
-
-pub fn warn(text: &str) {
-    println!("{}{}Warning: {}! {}", COLOR_BOLD, COLOR_YELLOW, text, COLOR_RESET);
-}
-
-pub fn halt(text: &str) {
-    println!("{}{}Panic!: {}! {}", COLOR_BOLD, COLOR_RED, text, COLOR_RESET);
-    std::process::exit(1);
-}
+// pub const _HELP: &str = "\nencore [--write] encrypt new object [--read] decrypt object [--forget] delete a stored object 
+// \nencore [--test] system tests (for important builds) [--initialize] recreates keys and deletes data
+// \nencore [--version] Prints the current version of encore.
+// \nFor more help try encore --help --write or encore --help --read !!!\n";
 
 // * for debugging only
-pub fn _dump(text: &str) {
-    println!("{}{}DUMPED: {}! {}", COLOR_BOLD, COLOR_YELLOW, text, COLOR_RESET);
-    std::process::exit(13);
-}
-
-// ! argument tools
-//* getting and counting positional arguments
-
-pub fn min_arguments(min: usize) -> bool {
-    // pulling the legnth from the standart env arguments
-    let args_len: usize = std::env::args().len() - 1;
-
-    if args_len >= min {
-        return true;
-
-    } else {
-        return false; 
-    }
-}
-
-pub fn fetch_arguments() -> Vec<String> {
-    let args_array: Vec<_> = std::env::args().collect();
-    return args_array;
-}
+// pub fn dump(text: &str) {
+//     println!("{}{}DUMPED: {}! {}", COLOR_BOLD, COLOR_YELLOW, text, COLOR_RESET);
+//     std::process::exit(13);
+// }
 
 pub fn truncate(s: &str, max_chars: usize) -> &str {
     match s.char_indices().nth(max_chars) {
@@ -167,11 +93,10 @@ pub fn start_log() {
     .expect("File could not be opened");
 
     if let Err(_e) = writeln!(log_file, "{}", log_msg) {
-        halt("Could not create or write to new log file");
+        append_log("Could not create or write to new log file");
+        exit(1);
     }
 
-    let msg: String = String::from("Log Created! \n");
-    output("GREEN", &msg);
 }
 
 pub fn append_log(data: &str) {
@@ -187,7 +112,7 @@ pub fn append_log(data: &str) {
 
     // Hendeling errs
     if let Err(_e) = writeln!(log_file, "{}", log_msg) {
-        warn("Couldn't open already existing log file");
+        eprintln!("Couldn't open already existing log file")
     }
 }
 
@@ -195,5 +120,13 @@ pub fn append_log(data: &str) {
 pub fn unexist(path: &str) {
     if std::path::Path::new(path).exists() { // deleting the original one
         std::fs::remove_file(path).unwrap();
+    }
+}
+
+pub fn exist(path: &str) -> bool {
+    if std::path::Path::new(path).exists() { 
+        return true;
+    } else {
+        return false;
     }
 }

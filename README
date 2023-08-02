@@ -8,4 +8,9 @@ and not allow prying eyes to snoop and or modify this data.
 This is also a learning tool for me to better understand rust and working with unix-like systems. I am no prefessional by anymeans
 with that being said I personally use this code on my machines i'm not perfect so exersize care.
 
+## Getting started 
+
+When using the recs it must be initialized by calling resc::initialize() before trying to read or write data 
+This ensures all the maps( json file ) and the system array are in the right place and can be accessed
+
 MORE documentation comming soon.

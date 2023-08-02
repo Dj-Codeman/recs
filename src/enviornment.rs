@@ -2,43 +2,30 @@ use std::fs::{create_dir_all, remove_dir_all};
 use sysinfo::{System, SystemExt}; // for finding free ram for vectors
 
 use crate::{
-    system::{output, notice, pass, halt, VERSION, HELP, append_log, start_log}, 
+    system::{append_log, start_log}, 
     auth::{generate_system_array, generate_user_key, index_system_array},
     config::{PUBLIC_MAP_DIRECTORY, SECRET_MAP_DIRECTORY, DATA_DIRECTORY, STREAMING_BUFFER_SIZE},
 };
 
 // !  enviornment as in program
-pub fn version() {
-    let mut ver: String = String::new();
-    ver.push_str("Version ");
-    ver.push_str(VERSION);
-    notice(&ver);
-}
 
-pub fn show_help() {
-    notice(HELP);
-}
-
-pub fn initialize() {
+pub fn set_system() {
     make_folders();
 
     if generate_system_array() == true {
-        if index_system_array() == false { halt("Could not index the system array !"); }
+        if index_system_array() == false { eprintln!("An error occoured while initializing check log"); }
     } else {
-        halt("An error occoured while creating the system array");
+        eprintln!("An error occoured while initializing check log");
     }
 
     generate_user_key();
 
-    pass("System initialized");
 }
 
 // ! enviornment as in file paths 
 
 pub fn make_folders() {
     // * Verifing path exists and creating missing ones 
-    // ! RUNS EVERY RUN TIME
-    output("GREEN", "Checking dir tree \n");
     create_dir_all("/var/encore").expect("making folders failed"); // make this dynamic
 
     let mut paths = vec![];

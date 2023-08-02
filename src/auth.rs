@@ -3,18 +3,19 @@ use rand::distributions::{Distribution, Uniform};
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{File, OpenOptions, read_to_string},
+    fs::{read_to_string, File, OpenOptions},
     io::{prelude::*, SeekFrom, Write},
+    process::exit,
     str,
 };
 
 use crate::{
     config::{
-        ARRAY_LEN, PRE_DEFINED_USERKEY, PUBLIC_MAP_DIRECTORY, SYSTEM_ARRAY_LOCATION,
+        ARRAY_LEN, CHUNK_SIZE, PRE_DEFINED_USERKEY, PUBLIC_MAP_DIRECTORY, SYSTEM_ARRAY_LOCATION,
         USER_KEY_LOCATION, USE_PRE_DEFINED_USERKEY,
     },
     encrypt::{create_hash, create_secure_chunk, decrypt, encrypt},
-    system::{append_log, halt, notice, unexist, warn, VERSION, output},
+    system::{append_log, unexist, VERSION},
 };
 
 // pbkdf Generator specs
@@ -26,7 +27,6 @@ static PBKDF2_WRITTING_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA512;
 
 const BEG_CHAR: u32 = 40;
 const END_CHAR: u32 = 80984; //80,999
-const CHUNK_SIZE: usize = 16; //5060
 
 // ! ALL KEYS FOLLOW THIS STRUCT
 #[derive(Serialize, Deserialize, Debug)]
@@ -90,7 +90,7 @@ pub fn generate_user_key() -> bool {
         msg.push_str(&String::from(e.to_string()));
         msg.push_str("'");
         append_log(&msg);
-        halt(&msg);
+        eprintln!("{}", &msg);
         return false;
     }
 
@@ -125,10 +125,11 @@ pub fn generate_user_key() -> bool {
         .expect("File could not written to");
 
     if let Err(_e) = writeln!(userkey_map_file, "{}", pretty_userkey_map) {
-        halt("Could not write json data to file");
+        eprintln!("An error occoured");
+        append_log("Could save map data to file");
     }
 
-    notice("User authentication created");
+    append_log("User authentication created");
     return true;
 }
 
@@ -172,11 +173,12 @@ pub fn generate_system_array() -> bool {
 
     // writing the data and checking for errors
     if let Err(_e) = write!(system_array_file, "{}", system_array) {
-        warn("Could not write the system_array to the path specified");
+        eprintln!("An error occoured");
+        append_log("Could not write the system_array to the path specified");
         return false;
     }
 
-    notice("Created system array");
+    append_log("Created system array");
     return true;
 }
 
@@ -187,7 +189,7 @@ pub fn index_system_array() -> bool {
     // ? Defing read heads and initial reading ranges
     let mut range_start: u32 = BEG_CHAR;
     let mut range_end: u32 = BEG_CHAR + CHUNK_SIZE as u32;
-    let mut buffer: Vec<u8> = vec![0; CHUNK_SIZE];
+    let mut buffer: Vec<u8> = vec![0; CHUNK_SIZE as usize];
     let mut chunk: String = String::new();
     let mut file = File::open(SYSTEM_ARRAY_LOCATION).unwrap();
 
@@ -195,7 +197,8 @@ pub fn index_system_array() -> bool {
     let range_len = range_end - range_start;
 
     if range_len < CHUNK_SIZE as u32 {
-        halt("Invalid secret chunk legnth");
+        eprintln!("An error occoured");
+        append_log("Invalid secret chunk legnth");
     }
 
     // reading chunks and crating hashes
@@ -246,15 +249,14 @@ pub fn index_system_array() -> bool {
                     .expect("File could not written to");
 
                 if let Err(_e) = write!(chunk_map_file, "{}", pretty_chunk_map) {
-                    warn("Could not write json data to file");
+                    eprintln!("An error occoured");
+                    append_log("Could not write the system_array to the path specified");
                     return false;
                 }
             }
             Err(_) => break,
         }
 
-        output("BLUE", ".");
-        if chunk_number % 17 == 0 { output("YELLOW", "*"); }
         // ? restting the indexs
         chunk_number += 1;
         chunk = "".to_string();
@@ -262,9 +264,7 @@ pub fn index_system_array() -> bool {
         range_end += CHUNK_SIZE as u32;
     }
 
-    output("BLUE", "\n");
     append_log("Indexed system array !");
-    notice("Indexed system array");
     return true;
 }
 
@@ -291,16 +291,18 @@ pub fn auth_user_key() -> String {
     let userkey = hex::encode(&password_key);
     let secret: String = "The hotdog man isn't real !?".to_string();
     // ! make the read the userkey from the map in the future
-    let verification_ciphertext: String = read_to_string(USER_KEY_LOCATION).expect("Couldn't read the map file");
+    let verification_ciphertext: String =
+        read_to_string(USER_KEY_LOCATION).expect("Couldn't read the map file");
 
-    let verification_result: String = decrypt(verification_ciphertext.to_string(), userkey.clone());
+    let verification_result: String =
+        decrypt(verification_ciphertext.to_string(), userkey.clone());
 
     if verification_result == secret {
         return userkey;
     } else {
         append_log("Authentication request failed");
-        halt("Auth error");
-        return "".to_string(); // ! i want to do unconvetional things here
+        eprintln!("Auth error");
+        exit(1);
     }
 }
 
@@ -323,15 +325,14 @@ pub fn fetch_chunk(num: u32) -> String {
             let range = Uniform::new(lower_limit, upper_limit);
             let map_num: u32 = range.sample(&mut rng);
             return anyways(map_num);
-        },
+        }
         _ => {
             let map_num: u32 = num;
             return anyways(map_num);
-        }        
+        }
     }
 
-    fn anyways(map_num: u32) -> String{
-
+    fn anyways(map_num: u32) -> String {
         // ? Assembeling the path
         let mut map_path: String = String::new();
         map_path.push_str(PUBLIC_MAP_DIRECTORY);
@@ -353,20 +354,20 @@ pub fn fetch_chunk(num: u32) -> String {
         // ? Running safety checks
         if pretty_map_data.version != VERSION {
             // Throw warning about wrong version. add option to re index the the system_array
-            warn("The maps used are from an older version of encore. consider running encore --reindex-system to fix this issue. (current data will be safe)");
+            append_log("The maps used are from an older version of recs. \n --reindex-system[NOT IMPLEMENTED YET] to fix this issue. (current data will be safe)");
         }
 
         // ? Setting parameters to read the chunk
         let chunk_start: u32 = pretty_map_data.chunk_beg;
         let chunk_end: u32 = pretty_map_data.chunk_end;
-        let mut buffer: Vec<u8> = vec![0; CHUNK_SIZE];
+        let mut buffer: Vec<u8> = vec![0; CHUNK_SIZE as usize];
         let mut chunk: String = String::new();
         let mut file = File::open(SYSTEM_ARRAY_LOCATION).unwrap();
 
         // ! param check
         let range_len = chunk_end - chunk_start;
         if range_len < CHUNK_SIZE as u32 {
-            halt("Invalid secret chunk legnth");
+            eprintln!("Invalid secret chunk legnth");
         }
 
         loop {
@@ -380,19 +381,20 @@ pub fn fetch_chunk(num: u32) -> String {
                     for data in buffer.iter() {
                         chunk += &format!("{:02X}", data);
                     }
-                    break
+                    break;
                 }
                 Err(e) => {
                     let err: &String = &e.to_string();
-                    let mut err_msg : String = String::new();
+                    let mut err_msg: String = String::new();
                     err_msg.push_str("An error occoured while reading the chunk data: ");
                     err_msg.push_str(&err);
-                    halt(&err_msg);
+                    append_log(&err_msg);
+                    eprintln!("{}", &err_msg);
                 }
             }
         }
 
-        // ? Verifing the last half 
+        // ? Verifing the last half
         let chunk_hash: &String = &create_hash(&chunk);
 
         if &pretty_map_data.chunk_hsh != chunk_hash {
@@ -404,9 +406,11 @@ pub fn fetch_chunk(num: u32) -> String {
             log.push_str("This will only re-calc the hashes of the chunks\n");
             log.push_str("If the systemkey file has been modified or tampered with \n");
             log.push_str("some data may be illegible. \n");
-            log.push_str("I would recommend exporting all data to asses any loses and reinitialize");
+            log.push_str(
+                "I would recommend exporting all data to asses any loses and reinitialize",
+            );
             append_log(&log);
-            halt(&log);
+            eprintln!("An error has occoured check logs");
         }
 
         return chunk;
@@ -422,12 +426,11 @@ pub fn create_writing_key(key: String) -> String {
     prekey_str.push_str(&auth_user_key());
 
     let prekey = create_hash(&prekey_str);
-    
+
     let salt: String = fetch_chunk(1);
     let num: u32 = "95180".parse().expect("Not a number!");
     let iteration = std::num::NonZeroU32::new(num).unwrap();
-    let mut final_key = [0; 16]; 
-    
+    let mut final_key = [0; 16];
 
     pbkdf2::derive(
         PBKDF2_WRITTING_ALG,

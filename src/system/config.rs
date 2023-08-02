@@ -1,4 +1,9 @@
 
+	// DEBUG
+	// show in depth stack info on panics
+
+pub const DEBUG: bool = false;
+	
 	// LOCATIONS
 	//  Data this is where the finished and encrypted files live
 	//  When keys are regenerated this folder will be emptyied
@@ -57,7 +62,7 @@ pub const STREAMING_BUFFER_SIZE: f64 = 102400.00;
 pub const SOFT_MOVE_FILES: bool = false;
 
 
-	//  save on destroy
+	//  leave in peace
 	//  if you want the destroy function to recover the file before deleting
 	//  the encrypted copy set this true
 	//  default = true
@@ -76,3 +81,4 @@ pub const PRE_DEFINED_USERKEY: &str = "ReplaceMe1!";
 
 // TODO add notes
 pub const ARRAY_LEN: u32 = 80963;
+pub const CHUNK_SIZE: u32 = 16; //5060
