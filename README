@@ -5,8 +5,7 @@ Felt trendy at first now it's serious
 RECS is aes-cbc-256 powered encryption library. It's purpose is to allow programs to store non-volatile data on the system
 and not allow prying eyes to snoop and or modify this data. 
 
-This is also a learning tool for me to better understand rust and working with unix-like systems. I am no prefessional by anymeans
-with that being said I personally use this code on my machines i'm not perfect so exersize care.
+This is also a learning tool for me to better understand rust and working with unix-like systems.
 
 ## Getting started 
 
