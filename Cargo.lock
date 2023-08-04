@@ -80,9 +80,9 @@ checksum = "a3e2c3daef883ecc1b5d58c15adae93470a91d425f3532ba1695849656af3fc1"
 
 [[package]]
 name = "cc"
-version = "1.0.80"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51f1226cd9da55587234753d1245dd5b132343ea240f26b6a9003d68706141ba"
+checksum = "6c6b2562119bf28c3439f7f02db99faf0aa1a8cdfe5772a2ee155d32227239f0"
 dependencies = [
  "libc 0.2.147",
 ]
@@ -313,6 +313,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 
 [[package]]
+name = "logging"
+version = "0.1.0"
+source = "git+https://github.com/Dj-Codeman/logger.git#289830d5ecdfc693248ec8237b12e41fd4f9a9de"
+dependencies = [
+ "chrono",
+ "system",
+ "time 0.2.27",
+]
+
+[[package]]
 name = "memoffset"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -450,9 +460,9 @@ dependencies = [
  "aes",
  "base64",
  "block-modes",
- "chrono",
  "hex",
  "hmac",
+ "logging",
  "rand",
  "rand_core",
  "ring",
@@ -462,7 +472,7 @@ dependencies = [
  "sha2",
  "substring",
  "sysinfo",
- "time 0.2.27",
+ "system",
 ]
 
 [[package]]
@@ -528,18 +538,18 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.180"
+version = "1.0.181"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ea67f183f058fe88a4e3ec6e2788e003840893b91bac4559cabedd00863b3ed"
+checksum = "6d3e73c93c3240c0bda063c239298e633114c69a888c3e37ca8bb33f343e9890"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.180"
+version = "1.0.181"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24e744d7782b686ab3b73267ef05697159cc0e5abbed3f47f9933165e5219036"
+checksum = "be02f6cb0cd3a5ec20bbcfbcbd749f57daddb1a0882dc2e46a6c236c90b977ed"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -697,6 +707,15 @@ dependencies = [
  "once_cell",
  "rayon",
  "winapi",
+]
+
+[[package]]
+name = "system"
+version = "0.1.0"
+source = "git+https://github.com/Dj-Codeman/system.git#5b2c3fdbc08debdcb061e50b5eba6348351e03fb"
+dependencies = [
+ "hex",
+ "sha2",
 ]
 
 [[package]]

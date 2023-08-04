@@ -8,8 +8,9 @@ pub mod encrypt;
 mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
-#[path = "system/system.rs"]
-pub mod system; // make this its own library
+
+use logging::append_log;
+use system::{is_path, del_file};
 
 use std::{
     fs::{File, OpenOptions},
@@ -24,9 +25,8 @@ use crate::{
         SYSTEM_ARRAY_LOCATION,
     },
     encrypt::create_hash,
-    local_env::set_system,
+    local_env::{set_system, VERSION, PROG},
     secret::{forget, read, write},
-    system::{append_log, exist, unexist, VERSION},
 };
 
 // !? Allow this as a toggle flag later
@@ -40,7 +40,7 @@ pub fn initialize() {
         check_debug();
     }
 
-    if exist(SYSTEM_ARRAY_LOCATION) == false {
+    if is_path(SYSTEM_ARRAY_LOCATION) == false {
         set_system();
     }
 
@@ -53,7 +53,7 @@ pub fn initialize() {
     max_map_path.push_str(&String::from(max_map.to_string()));
     max_map_path.push_str(".map");
 
-    if !exist(&max_map_path) {
+    if !is_path(&max_map_path) {
         // * to avoid heart ache if we find an existing system array we just re index it instead of deleting everything
         index_system_array();
     }
@@ -90,11 +90,13 @@ pub fn ping(owner: String, name: String) -> bool {
     secret_map_path.push_str(&name);
     secret_map_path.push_str(".json");
 
-    if !exist(&secret_map_path) {
-        return false;
-    } else {
-        return true;
-    }
+    return is_path(&secret_map_path);
+}
+
+#[test]
+fn ping_check(){
+    let result = ping(PROG.to_string(), "dummy".to_string());
+    assert_eq!(result, false);
 }
 
 // Debugging and tooling
@@ -103,6 +105,13 @@ pub fn check_map(map_num: u32) -> bool {
     let _ = fetch_chunk(map_num); // using fetch chunk to validate the map data
     return true;
 }
+
+#[test]
+fn null_map() {
+    let result = check_map(0);
+    assert_eq!(result, false);
+}
+// only passes on un initialized systems
 
 pub fn update_map(map_num: u32) -> bool {
     // ? Getting the current map data
@@ -137,7 +146,7 @@ pub fn update_map(map_num: u32) -> bool {
     };
 
     // write the new map file
-    unexist(&map_path);
+    del_file(&map_path);
     let updated_map = serde_json::to_string_pretty(&new_map).unwrap();
 
     let mut map_file = OpenOptions::new()
@@ -149,7 +158,7 @@ pub fn update_map(map_num: u32) -> bool {
 
     if let Err(_e) = writeln!(map_file, "{}", updated_map) {
         eprintln!("An error occoured");
-        append_log("Could save map data to file");
+        append_log(PROG, "Could save map data to file");
     };
 
     return true;

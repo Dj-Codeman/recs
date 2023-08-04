@@ -1,11 +1,15 @@
 use std::fs::{create_dir_all, remove_dir_all};
+use logging::{append_log, start_log};
 use sysinfo::{System, SystemExt}; // for finding free ram for vectors
 
 use crate::{
-    system::{append_log, start_log}, 
     auth::{generate_system_array, generate_user_key, index_system_array},
     config::{PUBLIC_MAP_DIRECTORY, SECRET_MAP_DIRECTORY, DATA_DIRECTORY, STREAMING_BUFFER_SIZE},
 };
+
+// Static stuff
+pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
+pub const PROG: &str = "recs";
 
 // !  enviornment as in program
 
@@ -42,8 +46,8 @@ pub fn make_folders() {
         }
     }
 
-    start_log();
-    append_log("Folders recreated");
+    start_log( PROG );
+    append_log(PROG, "Folders recreated");
 }
 
 

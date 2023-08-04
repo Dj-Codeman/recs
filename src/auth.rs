@@ -1,7 +1,9 @@
 use hex;
+use logging::append_log;
 use rand::distributions::{Distribution, Uniform};
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
+use system::del_dir;
 use std::{
     fs::{read_to_string, File, OpenOptions},
     io::{prelude::*, SeekFrom, Write},
@@ -14,8 +16,7 @@ use crate::{
         ARRAY_LEN, CHUNK_SIZE, PRE_DEFINED_USERKEY, PUBLIC_MAP_DIRECTORY, SYSTEM_ARRAY_LOCATION,
         USER_KEY_LOCATION, USE_PRE_DEFINED_USERKEY,
     },
-    encrypt::{create_hash, create_secure_chunk, decrypt, encrypt},
-    system::{append_log, unexist, VERSION},
+    encrypt::{create_hash, create_secure_chunk, decrypt, encrypt}, local_env::{PROG, VERSION},
 };
 
 // pbkdf Generator specs
@@ -24,7 +25,6 @@ static PBKDF2_WRITTING_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA512;
 
 // system array definitions
 // make this more dynamic or sum like that
-
 const BEG_CHAR: u32 = 40;
 const END_CHAR: u32 = 80984; //80,999
 
@@ -74,7 +74,7 @@ pub fn generate_user_key() -> bool {
     let cipher_integrity: String = encrypt(secret, userkey, 1024);
     // ! ^ this will be static since key sizes are really small
 
-    unexist(&USER_KEY_LOCATION);
+    del_dir(&USER_KEY_LOCATION);
 
     // creating the master.json file
     let mut userkey_file = OpenOptions::new()
@@ -89,7 +89,7 @@ pub fn generate_user_key() -> bool {
         msg.push_str("Error couldn't write user key to the path specified:: '");
         msg.push_str(&String::from(e.to_string()));
         msg.push_str("'");
-        append_log(&msg);
+        append_log(PROG,&msg);
         eprintln!("{}", &msg);
         return false;
     }
@@ -114,7 +114,7 @@ pub fn generate_user_key() -> bool {
     userkey_map_path.push_str("/userkey.json");
 
     // Deleting and recreating the json file
-    unexist(&userkey_map_path);
+    del_dir(&userkey_map_path);
 
     // writting to the master.json file
     let mut userkey_map_file = OpenOptions::new()
@@ -126,18 +126,18 @@ pub fn generate_user_key() -> bool {
 
     if let Err(_e) = writeln!(userkey_map_file, "{}", pretty_userkey_map) {
         eprintln!("An error occoured");
-        append_log("Could save map data to file");
+        append_log(PROG,"Could save map data to file");
     }
 
-    append_log("User authentication created");
+    append_log(PROG,"User authentication created");
     return true;
 }
 
 pub fn generate_system_array() -> bool {
-    append_log("Creating system array");
+    append_log(PROG,"Creating system array");
 
     // writing the system key to the file specified
-    unexist(&SYSTEM_ARRAY_LOCATION);
+    del_dir(&SYSTEM_ARRAY_LOCATION);
 
     // Creating the key file
     // ! Creating Header
@@ -174,11 +174,11 @@ pub fn generate_system_array() -> bool {
     // writing the data and checking for errors
     if let Err(_e) = write!(system_array_file, "{}", system_array) {
         eprintln!("An error occoured");
-        append_log("Could not write the system_array to the path specified");
+        append_log(PROG,"Could not write the system_array to the path specified");
         return false;
     }
 
-    append_log("Created system array");
+    append_log(PROG,"Created system array");
     return true;
 }
 
@@ -198,7 +198,7 @@ pub fn index_system_array() -> bool {
 
     if range_len < CHUNK_SIZE as u32 {
         eprintln!("An error occoured");
-        append_log("Invalid secret chunk legnth");
+        append_log(PROG,"Invalid secret chunk legnth");
     }
 
     // reading chunks and crating hashes
@@ -236,7 +236,7 @@ pub fn index_system_array() -> bool {
                 chunk_map_path.push_str("/chunk_");
                 chunk_map_path.push_str(&String::from(chunk_number.to_string()));
                 chunk_map_path.push_str(".map");
-                unexist(&chunk_map_path);
+                del_dir(&chunk_map_path);
 
                 let pretty_chunk_map = serde_json::to_string_pretty(&chunk_map).unwrap();
 
@@ -250,7 +250,7 @@ pub fn index_system_array() -> bool {
 
                 if let Err(_e) = write!(chunk_map_file, "{}", pretty_chunk_map) {
                     eprintln!("An error occoured");
-                    append_log("Could not write the system_array to the path specified");
+                    append_log(PROG,"Could not write the system_array to the path specified");
                     return false;
                 }
             }
@@ -264,13 +264,13 @@ pub fn index_system_array() -> bool {
         range_end += CHUNK_SIZE as u32;
     }
 
-    append_log("Indexed system array !");
+    append_log(PROG,"Indexed system array !");
     return true;
 }
 
 pub fn auth_user_key() -> String {
     // ! patched to just used fixed key
-    append_log("user key authentication request started");
+    append_log(PROG,"user key authentication request started");
 
     let password_0 = PRE_DEFINED_USERKEY;
 
@@ -300,7 +300,7 @@ pub fn auth_user_key() -> String {
     if verification_result == secret {
         return userkey;
     } else {
-        append_log("Authentication request failed");
+        append_log(PROG, "Authentication request failed");
         eprintln!("Auth error");
         exit(1);
     }
@@ -354,7 +354,7 @@ pub fn fetch_chunk(num: u32) -> String {
         // ? Running safety checks
         if pretty_map_data.version != VERSION {
             // Throw warning about wrong version. add option to re index the the system_array
-            append_log("The maps used are from an older version of recs. \n --reindex-system[NOT IMPLEMENTED YET] to fix this issue. (current data will be safe)");
+            append_log(PROG, "The maps used are from an older version of recs. \n --reindex-system[NOT IMPLEMENTED YET] to fix this issue. (current data will be safe)");
         }
 
         // ? Setting parameters to read the chunk
@@ -388,7 +388,7 @@ pub fn fetch_chunk(num: u32) -> String {
                     let mut err_msg: String = String::new();
                     err_msg.push_str("An error occoured while reading the chunk data: ");
                     err_msg.push_str(&err);
-                    append_log(&err_msg);
+                    append_log(PROG, &err_msg);
                     eprintln!("{}", &err_msg);
                 }
             }
@@ -409,7 +409,7 @@ pub fn fetch_chunk(num: u32) -> String {
             log.push_str(
                 "I would recommend exporting all data to asses any loses and reinitialize",
             );
-            append_log(&log);
+            append_log(PROG, &log);
             eprintln!("An error has occoured check logs");
         }
 

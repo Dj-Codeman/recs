@@ -1,6 +1,8 @@
 use hex::encode;
+use logging::append_log;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Serialize, Deserialize};
+use system::{del_dir, truncate};
 use std::{
     io::{Write, SeekFrom, prelude::*}, 
     fs::{metadata, OpenOptions, File, canonicalize, read_to_string}, 
@@ -9,11 +11,10 @@ use std::{
 
 // self and create are user made code
 use crate::{
-    system::{truncate, append_log, VERSION}, 
     encrypt::{encrypt, decrypt, create_hash},
     config::{SECRET_MAP_DIRECTORY, DATA_DIRECTORY, SOFT_MOVE_FILES, LEAVE_IN_PEACE,},
     auth::{fetch_chunk, array_arimitics, create_writing_key},
-    local_env::calc_buffer
+    local_env::{calc_buffer, PROG, VERSION}
 };
 
 
@@ -48,7 +49,7 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
     msg.push_str("Attempting to encrypt '");
     msg.push_str(&filename);
     msg.push_str("'");
-    append_log(&msg);
+    append_log( PROG, &msg);
 
     // testing if the file exists 
     let filename_existence: bool = Path::new(&filename).exists();
@@ -125,9 +126,8 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
         .open(secret_path.clone());
 
         match secret_file {
-            Ok(_) => append_log("new secret file created"),
+            Ok(_) => eprintln!("Error while writing please check log"),
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                append_log("secret file id already exists");
                 eprintln!("Error while writing please check log");
             },
             Err(_) => { 
@@ -200,10 +200,10 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
 
         // TODO ERROR HANDELING
         match secret_map_file {
-            Ok(_) => append_log("new secret map created"),
+            Ok(_) => append_log( PROG, "new secret map created").unwrap(),
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                std::fs::remove_file(secret_path).unwrap();
-                append_log("The json associated with this file id already exists. Nothing has been deleted.");
+                del_dir(&secret_path);
+                append_log( PROG, "The json associated with this file id already exists. Nothing has been deleted.").unwrap();
                 eprintln!("An error occoured while creating maps check logs");
                 exit(1);
             },
@@ -211,11 +211,11 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
                 eprintln!("An error occoured while creating maps");
                 exit(1);
             }
-        }
+        };
 
         if let Err(_) = write!(secret_map_file.as_mut().expect("Something went wrong"), "{}", cipher_data_map) {
             eprintln!("An error occoured check log");
-            append_log(&"Could't write the encrypted data");
+            append_log( PROG, &"Could't write the encrypted data");
         }
     
         // after everything has been written we can delete the file 
@@ -229,7 +229,7 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
         msg.push_str("Warning");
         msg.push_str(&filename);
         msg.push_str("Does not exist");
-        append_log(&msg);
+        append_log( PROG, &msg);
         eprintln!("{}", &msg);
         return false;
     }
@@ -237,7 +237,7 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
 
 pub fn read(secret_owner: String, secret_name: String) -> bool {
     // creating the secret json path
-    append_log("Decrypting request");
+    append_log( PROG, "Decrypting request");
     let mut secret_map_path: String = String::new();
     secret_map_path.push_str(SECRET_MAP_DIRECTORY);
     secret_map_path.push_str("/");
@@ -255,13 +255,13 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
         // ! Validating that we can mess with this data
         if secret_map.version != VERSION {
             eprintln!("Older version of map data. Fucking around and finding out anyway");
-            append_log("Data from and older version of recs attempting to read anyway");
+            append_log( PROG, "Data from and older version of recs attempting to read anyway");
         }
 
         // ensure the data is there
         if !std::path::Path::new(&secret_map.secret_path).exists() {
             eprintln!("An error occoured check logs");
-            append_log("THE DATA FILE SPECIFIED DOES NOT EXIST");
+            append_log( PROG, "THE DATA FILE SPECIFIED DOES NOT EXIST");
         }
     
         // generating the secret key for the file
@@ -290,7 +290,7 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
         let is_file: bool = std::path::Path::new(&secret_map.file_path).exists();
         if is_file == true { 
             eprintln!("An error occoured but a good one, check logs");
-            append_log("The file requested already exists"); 
+            append_log( PROG, "The file requested already exists"); 
             exit(0);
         }
         
@@ -334,7 +334,7 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
                 }
                 Err(e) => { 
                     eprintln!("An error has occoured check logs");
-                    append_log(&e.to_string())
+                    append_log( PROG, &e.to_string());
                 }
             }
 
@@ -345,22 +345,22 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
             let sig_version = truncate(&signature[2..], 6);
             if sig_version != VERSION {
                 eprintln!("An error occoured while reading data, check logs");
-                append_log("The signature data indicates an older version of recs or encore was used to write this.");
-                append_log("I'll try to read this data but if a can't get an older version or recs or encore and try again");
+                append_log( PROG, "The signature data indicates an older version of recs or encore was used to write this.");
+                append_log( PROG, "I'll try to read this data but if a can't get an older version or recs or encore and try again");
             }
 
             let sig_hash = truncate(&signature[9..], 20);
             if truncate(&create_hash(&encoded_buffer), 20).to_string() != sig_hash {
                 eprintln!("Something went really wrong, get some coffee or a drink and check the logs");
-                append_log("A chunk had an invalid has signature");
-                append_log("an option will be in a cli tool to ignore checks in an emergency");
+                append_log( PROG, "A chunk had an invalid has signature");
+                append_log( PROG, "an option will be in a cli tool to ignore checks in an emergency");
                 exit(1);
             }
 
             let sig_count_data = &signature[30..];
             let sig_count = sig_count_data.parse::<usize>().unwrap();
             if sig_count != signature_count {
-                append_log("Making note: while decrypting the signature counts are mis-aligned foul-play or bad code");
+                append_log( PROG, "Making note: while decrypting the signature counts are mis-aligned foul-play or bad code");
             }
             
             // ? unencoding buffer
@@ -384,14 +384,14 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
 
     }  else {
         eprintln!("The map requested can't be found");
-        append_log("The secret map doen't exist");
+        append_log( PROG, "The secret map doen't exist");
         return false;
     }   
 }
 
 pub fn forget(secret_owner: String, secret_name: String) -> bool {
     // creating the secret json file 
-    append_log("Forgetting secret");
+    append_log( PROG, "Forgetting secret");
     let mut secret_map_path: String = String::new();
     secret_map_path.push_str(SECRET_MAP_DIRECTORY);
     secret_map_path.push_str("/");

@@ -4,10 +4,11 @@ use hex;
 use hmac::{Hmac, Mac};
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::{Digest, Sha256};
+use system::truncate;
 use std::{str, process::exit};
 use substring::Substring;
 
-use crate::{auth::fetch_chunk, config::ARRAY_LEN, system::truncate};
+use crate::{auth::fetch_chunk, config::ARRAY_LEN };
 
 pub type Aes256Cbc = Cbc<Aes256, Pkcs7>;
 

@@ -42,11 +42,6 @@ pub const SYSTEM_ARRAY_LOCATION: &str = "/var/encore/array.recs";
 
 pub const USER_KEY_LOCATION: &str = "/var/encore/userdata.recs";
 
-	// log dir
-	// pub const LOG_FILE_LOCATION: &str = "/var/log/encore/general";
-
-pub const LOG_FILE_LOCATION: &str = "/var/log/encore.log";
-
 	// currently for debuging 
 	// the stream buffer will be dynamically assigned at runtime
 	// if this space is not available on run time exit with "No free resources"

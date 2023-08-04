@@ -14,7 +14,6 @@ path = "src/lib.rs"
 aes="0.7.5"
 base64 = "0.21.0"
 block-modes="0.8.1"
-chrono = "0.4.23"
 hex = "0.4.3"
 hmac = "0.12.1"
 # can these two be merged ?
@@ -27,4 +26,6 @@ serde_json = "1.0.64"
 sha2 = "0.10"
 substring = "1.4.5"
 sysinfo = "0.28.1"
-time = "0.2.23"
+#pretty = { git = "https://github.com/Dj-Codeman/pretty.git" }
+logging = { git = "https://github.com/Dj-Codeman/logger.git" }
+system = { git = "https://github.com/Dj-Codeman/system.git" }
