@@ -315,7 +315,7 @@ checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
 [[package]]
 name = "logging"
 version = "0.1.0"
-source = "git+https://github.com/Dj-Codeman/logger.git#289830d5ecdfc693248ec8237b12e41fd4f9a9de"
+source = "git+https://github.com/Dj-Codeman/logger.git#7f2bb8cde204cde4b0692fa52b5b7a6e5da8f2fe"
 dependencies = [
  "chrono",
  "system",
@@ -712,7 +712,7 @@ dependencies = [
 [[package]]
 name = "system"
 version = "0.1.0"
-source = "git+https://github.com/Dj-Codeman/system.git#5b2c3fdbc08debdcb061e50b5eba6348351e03fb"
+source = "git+https://github.com/Dj-Codeman/system.git#604e05924479a745abbcd7d79fcb450b6aeb4502"
 dependencies = [
  "hex",
  "sha2",
