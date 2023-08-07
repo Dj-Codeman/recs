@@ -13,8 +13,10 @@ use std::{
 use crate::{
     encrypt::{encrypt, decrypt, create_hash},
     config::{SECRET_MAP_DIRECTORY, DATA_DIRECTORY, SOFT_MOVE_FILES, LEAVE_IN_PEACE,},
-    auth::{fetch_chunk, array_arimitics, create_writing_key},
-    local_env::{calc_buffer, PROG, VERSION}
+    auth::create_writing_key,
+    local_env::{calc_buffer, PROG, VERSION},
+    array::array_arimitics,
+    array_tools::fetch_chunk,
 };
 
 

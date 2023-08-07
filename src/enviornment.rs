@@ -3,8 +3,9 @@ use logging::{append_log, start_log};
 use sysinfo::{System, SystemExt}; // for finding free ram for vectors
 
 use crate::{
-    auth::{generate_system_array, generate_user_key, index_system_array},
+    auth::generate_user_key,
     config::{PUBLIC_MAP_DIRECTORY, SECRET_MAP_DIRECTORY, DATA_DIRECTORY, STREAMING_BUFFER_SIZE},
+    array::{generate_system_array, index_system_array},
 };
 
 // Static stuff
@@ -30,7 +31,7 @@ pub fn set_system() {
 
 pub fn make_folders() {
     // * Verifing path exists and creating missing ones 
-    create_dir_all("/var/encore").expect("making folders failed"); // make this dynamic
+    create_dir_all("/var/recs").expect("making folders failed"); // make this dynamic
 
     let mut paths = vec![];
     paths.insert(0, DATA_DIRECTORY);

@@ -8,7 +8,7 @@ use system::truncate;
 use std::{str, process::exit};
 use substring::Substring;
 
-use crate::{auth::fetch_chunk, config::ARRAY_LEN };
+use crate::{array_tools::fetch_chunk, config::ARRAY_LEN };
 
 pub type Aes256Cbc = Cbc<Aes256, Pkcs7>;
 

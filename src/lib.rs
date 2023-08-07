@@ -8,9 +8,13 @@ pub mod encrypt;
 mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
+#[path = "system/array.rs"]
+mod array;
+#[path = "system/array_retrive.rs"]
+mod array_tools;
 
 use logging::append_log;
-use system::{is_path, del_file};
+use system::{del_file, is_path};
 
 use std::{
     fs::{File, OpenOptions},
@@ -19,13 +23,14 @@ use std::{
 };
 
 use crate::{
-    auth::{fetch_chunk, index_system_array, ChunkMap},
+    array_tools::fetch_chunk,
+    array::{index_system_array, ChunkMap},
     config::{
         ARRAY_LEN, CHUNK_SIZE, DEBUG, PUBLIC_MAP_DIRECTORY, SECRET_MAP_DIRECTORY,
         SYSTEM_ARRAY_LOCATION,
     },
     encrypt::create_hash,
-    local_env::{set_system, VERSION, PROG},
+    local_env::{set_system, PROG, VERSION},
     secret::{forget, read, write},
 };
 
@@ -36,25 +41,25 @@ fn check_debug() {
 }
 
 pub fn initialize() {
-    if DEBUG == true {
+    if DEBUG {
         check_debug();
     }
 
-    if is_path(SYSTEM_ARRAY_LOCATION) == false {
+    ensure_system_path();
+    ensure_max_map_exists();
+}
+
+fn ensure_system_path() {
+    if !is_path(SYSTEM_ARRAY_LOCATION) {
         set_system();
     }
+}
 
-    // Do make a for loop to check the presents of all maps in the range
-    let max_map: u32 = ARRAY_LEN / CHUNK_SIZE;
-
-    let mut max_map_path = String::new();
-    max_map_path.push_str(PUBLIC_MAP_DIRECTORY);
-    max_map_path.push_str("/");
-    max_map_path.push_str(&String::from(max_map.to_string()));
-    max_map_path.push_str(".map");
+fn ensure_max_map_exists() {
+    let max_map = ARRAY_LEN / CHUNK_SIZE;
+    let max_map_path = format!("{}/{}.map", PUBLIC_MAP_DIRECTORY, max_map);
 
     if !is_path(&max_map_path) {
-        // * to avoid heart ache if we find an existing system array we just re index it instead of deleting everything
         index_system_array();
     }
 }
@@ -82,19 +87,17 @@ pub fn remove(owner: String, name: String) -> Option<bool> {
 }
 
 pub fn ping(owner: String, name: String) -> bool {
-    let mut secret_map_path: String = String::new();
-    secret_map_path.push_str(SECRET_MAP_DIRECTORY);
-    secret_map_path.push_str("/");
-    secret_map_path.push_str(&owner);
-    secret_map_path.push_str("-");
-    secret_map_path.push_str(&name);
-    secret_map_path.push_str(".json");
-
-    return is_path(&secret_map_path);
+    let secret_map_path = format!(
+        "{}/{owner}-{name}.json",
+        SECRET_MAP_DIRECTORY,
+        owner = owner,
+        name = name
+    );
+    is_path(&secret_map_path)
 }
 
 #[test]
-fn ping_check(){
+fn ping_check() {
     let result = ping(PROG.to_string(), "dummy".to_string());
     assert_eq!(result, false);
 }
@@ -114,6 +117,7 @@ fn null_map() {
     assert_eq!(result, false);
 }
 // only passes on un initialized systems
+
 
 pub fn update_map(map_num: u32) -> bool {
     // ? Getting the current map data
@@ -166,14 +170,14 @@ pub fn update_map(map_num: u32) -> bool {
     return true;
 }
 
-pub fn index_array() -> Option<bool> {
-    index_system_array();
-    return Some(true);
-}
+// pub fn index_array() -> Option<bool> {
+//     index_system_array();
+//     return Some(true);
+// }
 
 pub fn _get_array_props() {
     // reading part of the array
-    // get version 
+    // get version
     // add a hash somewhere
     let _ = "";
 }
