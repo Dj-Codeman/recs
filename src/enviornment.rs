@@ -12,7 +12,8 @@ use crate::{
 
 // Static stuff
 pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
-pub const PROG: &str = "recs";
+pub const PROG: &str = "recs";// THIS HAS TO BE DEFINED SOMEWHERE ELSE
+
 
 // semi static
 lazy_static! {
