@@ -5,9 +5,9 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
 use crate::array::{array_arimitics, ChunkMap};
-use crate::config::{PUBLIC_MAP_DIRECTORY, SYSTEM_ARRAY_LOCATION, CHUNK_SIZE};
+use crate::config::{SYSTEM_ARRAY_LOCATION, CHUNK_SIZE};
 use crate::encrypt::create_hash;
-use crate::local_env::{VERSION, PROG};
+use crate::local_env::{VERSION, PROG, MAPS};
 
 pub fn fetch_chunk(num: u32) -> String {
     let upper_limit = array_arimitics();
@@ -26,7 +26,7 @@ pub fn fetch_chunk(num: u32) -> String {
 }
 
 fn fetch_chunk_by_number(map_num: u32) -> String {
-    let map_path = format!("{}/chunk_{}.map", PUBLIC_MAP_DIRECTORY, map_num);
+    let map_path = format!("{}/chunk_{}.map", *MAPS, map_num);
 
     let map_data = read_map_data(&map_path);
 

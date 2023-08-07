@@ -12,10 +12,8 @@ use std::{
 };
 
 use crate::{
-    config::{
-        PUBLIC_MAP_DIRECTORY,
-        USER_KEY_LOCATION,
-    },
+    config::USER_KEY_LOCATION,
+    local_env::MAPS,
     encrypt::{create_hash, decrypt, encrypt}, local_env::{PROG, VERSION}, array_tools::fetch_chunk, array::array_arimitics,
 };
 
@@ -74,10 +72,7 @@ pub fn generate_user_key() -> bool {
         .expect("File could not written to");
 
     if let Err(e) = write!(userkey_file, "{}", cipher_integrity) {
-        let mut msg: String = String::new();
-        msg.push_str("Error couldn't write user key to the path specified:: '");
-        msg.push_str(&String::from(e.to_string()));
-        msg.push_str("'");
+        let msg: String = format!("Error couldn't write user key to the path specified: {}", e.to_string());
         append_log(PROG,&msg);
         eprintln!("{}", &msg);
         return false;
@@ -98,9 +93,7 @@ pub fn generate_user_key() -> bool {
     let pretty_userkey_map = serde_json::to_string_pretty(&userkey_map_data).unwrap();
 
     // creating the json path
-    let mut userkey_map_path: String = String::new();
-    userkey_map_path.push_str(PUBLIC_MAP_DIRECTORY);
-    userkey_map_path.push_str("/userkey.json");
+    let userkey_map_path = format!("{}/userkey.map", *MAPS);
 
     // Deleting and recreating the json file
     del_dir(&userkey_map_path);
@@ -144,7 +137,7 @@ pub fn auth_user_key() -> String {
     let secret: String = "The hotdog man isn't real !?".to_string();
     // ! make the read the userkey from the map in the future
     let verification_ciphertext: String =
-        read_to_string(USER_KEY_LOCATION).expect("Couldn't read the map file");
+        read_to_string(format!("{}/userkey.map", *MAPS)).expect("Couldn't read the map file");
 
     let verification_result: String =
         decrypt(verification_ciphertext.to_string(), userkey.clone());

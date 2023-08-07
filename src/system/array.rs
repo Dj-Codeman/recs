@@ -9,8 +9,9 @@ use system::{del_dir, is_path, del_file};
 
 use crate::{
     config::{
-        ARRAY_LEN, CHUNK_SIZE, PUBLIC_MAP_DIRECTORY, SYSTEM_ARRAY_LOCATION,
+        ARRAY_LEN, CHUNK_SIZE, SYSTEM_ARRAY_LOCATION,
     },
+    local_env::MAPS,
     encrypt::{create_hash, create_secure_chunk}, local_env::{PROG, VERSION},
 };
 
@@ -131,7 +132,7 @@ pub fn index_system_array() -> bool {
 
                 let chunk_map_path = format!(
                     "{}/chunk_{}.map",
-                    PUBLIC_MAP_DIRECTORY,
+                    *MAPS,
                     chunk_number
                 );
 

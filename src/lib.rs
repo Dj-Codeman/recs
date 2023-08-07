@@ -26,11 +26,11 @@ use crate::{
     array_tools::fetch_chunk,
     array::{index_system_array, ChunkMap},
     config::{
-        ARRAY_LEN, CHUNK_SIZE, DEBUG, PUBLIC_MAP_DIRECTORY, SECRET_MAP_DIRECTORY,
+        ARRAY_LEN, CHUNK_SIZE, DEBUG,
         SYSTEM_ARRAY_LOCATION,
     },
     encrypt::create_hash,
-    local_env::{set_system, PROG, VERSION},
+    local_env::{set_system, PROG, VERSION, MAPS, META},
     secret::{forget, read, write},
 };
 
@@ -57,7 +57,7 @@ fn ensure_system_path() {
 
 fn ensure_max_map_exists() {
     let max_map = ARRAY_LEN / CHUNK_SIZE;
-    let max_map_path = format!("{}/{}.map", PUBLIC_MAP_DIRECTORY, max_map);
+    let max_map_path = format!("{}/{}.map", *MAPS, max_map);
 
     if !is_path(&max_map_path) {
         index_system_array();
@@ -89,7 +89,7 @@ pub fn remove(owner: String, name: String) -> Option<bool> {
 pub fn ping(owner: String, name: String) -> bool {
     let secret_map_path = format!(
         "{}/{owner}-{name}.json",
-        SECRET_MAP_DIRECTORY,
+        *META,
         owner = owner,
         name = name
     );
@@ -121,11 +121,8 @@ fn null_map() {
 
 pub fn update_map(map_num: u32) -> bool {
     // ? Getting the current map data
-    let mut map_path: String = String::new();
-    map_path.push_str(PUBLIC_MAP_DIRECTORY);
-    map_path.push_str("/chunk_");
-    map_path.push_str(&String::from(map_num.to_string()));
-    map_path.push_str(".map");
+    let map_path: String = format!("{}/chunk_{}.map", *MAPS, map_num);
+
 
     // ? Reading the map
     let mut map_file = File::open(&map_path).expect("File could not be opened");

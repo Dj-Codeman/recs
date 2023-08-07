@@ -1,18 +1,28 @@
-use nix::unistd::geteuid;
+// use nix::unistd::geteuid;
+use lazy_static::lazy_static;
 use logging::{append_log, start_log};
 use sysinfo::{System, SystemExt};
 use system::{is_path, del_dir, make_dir, make_dir_perm}; // for finding free ram for vectors
 
 use crate::{
     auth::generate_user_key,
-    config::{PUBLIC_MAP_DIRECTORY, SECRET_MAP_DIRECTORY, DATA_DIRECTORY, STREAMING_BUFFER_SIZE},
-    array::{generate_system_array, index_system_array},
+    config::STREAMING_BUFFER_SIZE,
+    array::{generate_system_array, index_system_array}, encrypt::create_hash,
 };
 
 // Static stuff
 pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
 pub const PROG: &str = "recs";
 
+// semi static
+lazy_static! {
+    // Default rescs directory
+    pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(&PROG.to_string()));
+    // Paths for important things
+    pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.clone()); 
+    pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.clone()); 
+    pub static ref META: String = format!("{}/meta", SYSTEM_PATH.clone()); 
+}
 // !  enviornment as in program
 
 pub fn set_system() {
@@ -32,18 +42,17 @@ pub fn set_system() {
 
 pub fn make_folders() {
     // * Verifing path exists and creating missing ones 
-    let system_path = format!("/var/recs/{}/", geteuid());
     let permissions = 0o770;
 
-    match make_dir_perm(&system_path, permissions) {
+    match make_dir_perm(&SYSTEM_PATH, permissions) {
         Ok(()) => () ,
         Err(err) => eprintln!("{}", err),
     }
 
     let mut paths = vec![];
-    paths.insert(0, DATA_DIRECTORY);
-    paths.insert(1, PUBLIC_MAP_DIRECTORY);
-    paths.insert(2, SECRET_MAP_DIRECTORY);
+    paths.insert(0, DATA.clone());
+    paths.insert(1, MAPS.clone());
+    paths.insert(2, META.clone());
 
     for path in paths.iter() {
         if is_path(path) {

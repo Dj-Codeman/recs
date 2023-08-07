@@ -2,7 +2,7 @@ use hex::encode;
 use logging::append_log;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Serialize, Deserialize};
-use system::{del_dir, truncate};
+use system::{del_dir, truncate, is_path, del_file};
 use std::{
     io::{Write, SeekFrom, prelude::*}, 
     fs::{metadata, OpenOptions, File, canonicalize, read_to_string}, 
@@ -12,9 +12,9 @@ use std::{
 // self and create are user made code
 use crate::{
     encrypt::{encrypt, decrypt, create_hash},
-    config::{SECRET_MAP_DIRECTORY, DATA_DIRECTORY, SOFT_MOVE_FILES, LEAVE_IN_PEACE,},
+    config::{SOFT_MOVE_FILES, LEAVE_IN_PEACE,},
     auth::create_writing_key,
-    local_env::{calc_buffer, PROG, VERSION},
+    local_env::{calc_buffer, PROG, VERSION, DATA, META},
     array::array_arimitics,
     array_tools::fetch_chunk,
 };
@@ -47,24 +47,15 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
         fit_buffer / 4
     };
 
-    let mut msg: String = String::new();
-    msg.push_str("Attempting to encrypt '");
-    msg.push_str(&filename);
-    msg.push_str("'");
+    let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
     append_log( PROG, &msg);
 
     // testing if the file exists 
     let filename_existence: bool = Path::new(&filename).exists();
 
     if filename_existence {
-        // creating the secret json file 
-        let mut secret_map_path: String = String::new();
-        secret_map_path.push_str(SECRET_MAP_DIRECTORY);
-        secret_map_path.push_str("/");
-        secret_map_path.push_str(&secret_owner);
-        secret_map_path.push_str("-");
-        secret_map_path.push_str(&secret_name);
-        secret_map_path.push_str(".json");
+        // creating the encrypted meta data file
+        let secret_map_path: String = format!("{}/{}-{}.meta", *META, secret_owner, secret_name);
 
         // ? picking a chunk number
         let upper_limit: u32 = array_arimitics();
@@ -76,14 +67,10 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
 
         // creating the rest of the struct data
         let unique_id: String = truncate(&encode(create_hash(&filename)), 20).to_string();
-        let canon_path = canonicalize(&filename).expect("path doesn't exist").display().to_string();
+        let canon_path: String = canonicalize(&filename).expect("path doesn't exist").display().to_string();
 
         // create the secret path
-        let mut secret_path = String::new();
-        secret_path.push_str(DATA_DIRECTORY);
-        secret_path.push_str("/");
-        secret_path.push_str(&unique_id);
-        secret_path.push_str(".recs"); // rust encode secret
+        let secret_path: String = format!("{}/{}.recs", *DATA, unique_id);
 
         // Determining chunk amount and size 
         let chunk_count: usize = file_size as usize / buffer_size;
@@ -150,14 +137,13 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
                         encoded_buffer += &format!("{:02X}", data);
                     }
                     // create chunk signature
-                    let mut sig_data: String = String::new();
-                    sig_data.push_str(&signature_count.to_string().len().to_string()); //* This defines the signature size for readback */
-                    sig_data.push_str("-");
-                    sig_data.push_str(VERSION);
-                    sig_data.push_str("-");
-                    sig_data.push_str(&truncate(&create_hash(&encoded_buffer), 20).to_string()); 
-                    sig_data.push_str("-");
-                    sig_data.push_str(&signature_count.to_string());
+                    let sig_data = format!(
+                        "{}-{}-{}-{}",
+                        signature_count.to_string().len(),
+                        VERSION,
+                        truncate(&create_hash(&encoded_buffer), 20),
+                        signature_count
+                    );
     
                     // hexing all the data for handeling
                     let signature: String = hex::encode(sig_data);
@@ -227,10 +213,7 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
         return true
 
     } else {
-        let mut msg = String::new();
-        msg.push_str("Warning");
-        msg.push_str(&filename);
-        msg.push_str("Does not exist");
+        let msg: String = format!("Warning {} doesn't exist", &filename);
         append_log( PROG, &msg);
         eprintln!("{}", &msg);
         return false;
@@ -240,14 +223,8 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
 pub fn read(secret_owner: String, secret_name: String) -> bool {
     // creating the secret json path
     append_log( PROG, "Decrypting request");
-    let mut secret_map_path: String = String::new();
-    secret_map_path.push_str(SECRET_MAP_DIRECTORY);
-    secret_map_path.push_str("/");
-    secret_map_path.push_str(&secret_owner);
-    secret_map_path.push_str("-");
-    secret_map_path.push_str(&secret_name);
-    secret_map_path.push_str(".json");
-    
+    let secret_map_path = format!("{}/{}-{}.meta", *META, secret_owner, secret_name);
+
     let secret_json_existence: bool = Path::new(&secret_map_path).exists();
     if secret_json_existence {
         let cipher_map_data = read_to_string(secret_map_path).expect("Couldn't read the map file");                
@@ -394,16 +371,10 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
 pub fn forget(secret_owner: String, secret_name: String) -> bool {
     // creating the secret json file 
     append_log( PROG, "Forgetting secret");
-    let mut secret_map_path: String = String::new();
-    secret_map_path.push_str(SECRET_MAP_DIRECTORY);
-    secret_map_path.push_str("/");
-    secret_map_path.push_str(&secret_owner);
-    secret_map_path.push_str("-");
-    secret_map_path.push_str(&secret_name);
-    secret_map_path.push_str(".json");
+    let secret_map_path = format!("{}/{}-{}.meta", *META, secret_owner, secret_name);
 
     // testing if the secret json exists before starting encryption
-    if Path::new(&secret_map_path).exists() {
+    if is_path(&secret_map_path) {
         let cipher_map_data = read_to_string(secret_map_path.clone()).expect("Couldn't read the json file");        
         let secret_map_data = decrypt(cipher_map_data, fetch_chunk(1).to_string());
         let secret_map: SecretDataIndex = serde_json::from_str(&secret_map_data).unwrap();
@@ -412,16 +383,16 @@ pub fn forget(secret_owner: String, secret_name: String) -> bool {
             read(secret_owner, secret_name);
             
             // deleted secret data 
-            if std::path::Path::new(&secret_map.secret_path).exists() {
-                std::fs::remove_file(&secret_map.secret_path).unwrap();
+            if is_path(&secret_map.secret_path) {
+                del_file(&secret_map.secret_path);
             }
-            std::fs::remove_file(&secret_map_path).unwrap();
+            del_file(&secret_map_path);
         } else {
             // deleted secret data 
-            if std::path::Path::new(&secret_map.secret_path).exists() {
-                std::fs::remove_file(&secret_map.secret_path).unwrap();
+            if is_path(&secret_map.secret_path) {
+                del_file(&secret_map.secret_path);
             }
-            std::fs::remove_file(&secret_map_path).unwrap();
+            del_file(&secret_map_path);
         }
         return true
 

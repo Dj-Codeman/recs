@@ -3,32 +3,6 @@
 	// show in depth stack info on panics
 
 pub const DEBUG: bool = true;
-	
-	// LOCATIONS
-	//  Data this is where the finished and encrypted files live
-	//  When keys are regenerated this folder will be emptyied
-	//  default /var/recs/data
-
-pub const DATA_DIRECTORY: &str = "/var/resc/secrets";
-
-	//  JSON This is where plan text maps will live
-	//  these are generated along side the keys
-	//  default /var/recs/indexs
-
-pub const PUBLIC_MAP_DIRECTORY: &str = "/var/resc/maps";
-
-	//  This is where the encrypted jsons for written file
-	//  will live. The json debug tool should be used to decrypt
-	//  and modify these files
-
-pub const SECRET_MAP_DIRECTORY: &str = "/var/recs/secure_maps";
-
-	//  SYSTEM ARRAY file is a chunk of crypto safe* random numbers
-	//  this file is used to create the userkey and encrypt files
-	//  if this key is missing on script call all file in:
-	//  $datadir will be illegible
-	//  IF THIS KEY IS DELETED ALL DATA IS CONSIDERED LOST
-	//  default /opt/recs/keys/systemkey.dk
 
 
 pub const SYSTEM_ARRAY_LOCATION: &str = "/var/recs/array.recs";
@@ -76,5 +50,5 @@ pub const ARRAY_LEN: u32 = 80963;
 	// Will document one day. the underline technology is aes-256-cbc
 	// alot of weird descions led to this needing to be defined but 
 	// dont change this unless your rewriting half of this progect
-	
+
 pub const CHUNK_SIZE: u32 = 16; //5060
