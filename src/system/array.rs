@@ -157,7 +157,7 @@ pub fn index_system_array() -> bool {
         }
 
         chunk_number += 1;
-        // chunk = "".to_string();
+        chunk = "".to_string();
         range_start = range_end;
         range_end += CHUNK_SIZE as u32;
     }
