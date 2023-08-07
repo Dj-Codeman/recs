@@ -28,7 +28,7 @@ pub fn set_system() {
 
 }
 
-// ! enviornment as in file paths 
+// ! enviornment as in file paths  
 
 pub fn make_folders() {
     // * Verifing path exists and creating missing ones 
