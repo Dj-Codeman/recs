@@ -1,6 +1,7 @@
 use std::fs::{create_dir_all, remove_dir_all};
 use logging::{append_log, start_log};
-use sysinfo::{System, SystemExt}; // for finding free ram for vectors
+use sysinfo::{System, SystemExt};
+use system::{is_path, del_dir, make_dir}; // for finding free ram for vectors
 
 use crate::{
     auth::generate_user_key,
@@ -39,15 +40,15 @@ pub fn make_folders() {
     paths.insert(2, SECRET_MAP_DIRECTORY);
 
     for path in paths.iter() {
-        if std::path::Path::new(&path).exists() {
-            remove_dir_all(path).expect("Deleting the folders failed");
-            create_dir_all(path).expect("making folders failed");
+        if is_path(path) {
+            del_dir(path);
+            make_dir(path);
         } else {
-            create_dir_all(path).expect("making folders failed");   
+            make_dir(path);
         }
     }
 
-    start_log( PROG );
+    start_log(PROG);
     append_log(PROG, "Folders recreated");
 }
 

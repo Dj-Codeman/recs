@@ -7,31 +7,31 @@ pub const DEBUG: bool = false;
 	// LOCATIONS
 	//  Data this is where the finished and encrypted files live
 	//  When keys are regenerated this folder will be emptyied
-	//  default /var/encore/data
+	//  default /var/recs/data
 
-pub const DATA_DIRECTORY: &str = "/var/encore/secrets";
+pub const DATA_DIRECTORY: &str = "/var/resc/secrets";
 
 	//  JSON This is where plan text maps will live
 	//  these are generated along side the keys
-	//  default /var/encore/indexs
+	//  default /var/recs/indexs
 
-pub const PUBLIC_MAP_DIRECTORY: &str = "/var/encore/maps";
+pub const PUBLIC_MAP_DIRECTORY: &str = "/var/resc/maps";
 
 	//  This is where the encrypted jsons for written file
 	//  will live. The json debug tool should be used to decrypt
 	//  and modify these files
 
-pub const SECRET_MAP_DIRECTORY: &str = "/var/encore/secure_maps";
+pub const SECRET_MAP_DIRECTORY: &str = "/var/recs/secure_maps";
 
 	//  SYSTEM ARRAY file is a chunk of crypto safe* random numbers
 	//  this file is used to create the userkey and encrypt files
 	//  if this key is missing on script call all file in:
 	//  $datadir will be illegible
 	//  IF THIS KEY IS DELETED ALL DATA IS CONSIDERED LOST
-	//  default /opt/encore/keys/systemkey.dk
+	//  default /opt/recs/keys/systemkey.dk
 
 
-pub const SYSTEM_ARRAY_LOCATION: &str = "/var/encore/array.recs";
+pub const SYSTEM_ARRAY_LOCATION: &str = "/var/recs/array.recs";
 
 	//	The user key is derived from the users specific password
 	//	This is the key used to encrypt the files while
@@ -40,7 +40,7 @@ pub const SYSTEM_ARRAY_LOCATION: &str = "/var/encore/array.recs";
 	//  $datadir will be illegible
 	//  IF THIS KEY IS DELETED ALL DATA IS CONSIDERED LOST
 
-pub const USER_KEY_LOCATION: &str = "/var/encore/userdata.recs";
+pub const USER_KEY_LOCATION: &str = "/var/recs/userdata.recs";
 
 	// currently for debuging 
 	// the stream buffer will be dynamically assigned at runtime
@@ -66,7 +66,7 @@ pub const SOFT_MOVE_FILES: bool = false;
 pub const LEAVE_IN_PEACE: bool = false;
 
 	// PRE DEFINED SECRET 
-	// if you use encore when no password can be input the userkey prompt can 
+	// if you use recs when no password can be input the userkey prompt can 
 	// be skipped by defining a a secret value here 
 	// THIS IS LESS SECURE BECAUSE THE KEY IS TECHNICALLY STORED ON THE MACHINE
 
