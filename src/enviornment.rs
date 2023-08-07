@@ -20,6 +20,7 @@ lazy_static! {
     // Default rescs directory
     pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(&PROG.to_string()));
     // Paths for important things
+    pub static ref ARRAY_PATH: String = format!("/usr/recs");
     pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.clone()); 
     pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.clone()); 
     pub static ref META: String = format!("{}/meta", SYSTEM_PATH.clone()); 
@@ -41,7 +42,7 @@ pub fn set_system() {
 
 // ! enviornment as in file paths  
 
-pub fn make_folders() {
+fn make_folders() {
     // * Verifing path exists and creating missing ones 
     let permissions = 0o770;
 
@@ -54,6 +55,7 @@ pub fn make_folders() {
     paths.insert(0, DATA.clone());
     paths.insert(1, MAPS.clone());
     paths.insert(2, META.clone());
+    paths.insert(2, ARRAY_PATH.clone());
 
     for path in paths.iter() {
         if is_path(path) {

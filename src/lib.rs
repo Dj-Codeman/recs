@@ -13,9 +13,8 @@ mod array;
 #[path = "system/array_retrive.rs"]
 mod array_tools;
 
-use local_env::SYSTEM_PATH;
 use logging::append_log;
-use system::{del_file, is_path, make_dir};
+use system::{del_file, is_path};
 
 use std::{
     fs::{File, OpenOptions},
@@ -46,7 +45,6 @@ pub fn initialize() {
         check_debug();
     }
 
-    make_dir(&SYSTEM_PATH.clone());
     ensure_system_path();
     ensure_max_map_exists();
 }
