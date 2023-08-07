@@ -46,9 +46,7 @@ pub fn initialize() {
         check_debug();
     }
 
-    if !is_path(&SYSTEM_PATH.clone()){
-        make_dir(&SYSTEM_PATH.clone());
-    }
+    make_dir(&SYSTEM_PATH.clone());
     ensure_system_path();
     ensure_max_map_exists();
 }
