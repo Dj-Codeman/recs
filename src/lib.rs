@@ -67,31 +67,31 @@ fn ensure_max_map_exists() {
 
 // Normal actions
 #[no_mangle]
-pub extern "C" fn insert(filename: String, owner: String, name: String) -> Option<bool> {
-    if !write(filename, owner, name) {
+pub extern "C" fn insert(filename: &str, owner: &str, name: &str) -> Option<bool> {
+    if !write(filename.to_owned(), owner.to_owned(), name.to_owned()) {
         exit(1)
     }
     return Some(true);
 }
 
 #[no_mangle]
-pub extern "C" fn retrive(owner: String, name: String) -> Option<bool> {
-    if !read(owner, name) {
-        exit(1);
+pub extern "C" fn retrive(owner: &str, name: &str) -> bool {
+    if !read(owner.to_owned(), name.to_owned()) {
+        return false
     }
-    return Some(true);
+    return true
 }
 
 #[no_mangle]
-pub extern "C" fn remove(owner: String, name: String) -> Option<bool> {
-    if !forget(owner, name) {
-        exit(1);
+pub extern "C" fn remove(owner: &str, name: &str) -> bool {
+    if !forget(owner.to_owned(), name.to_owned()) {
+        return false
     }
-    return Some(true);
+    true
 }
 
 #[no_mangle]
-pub extern "C" fn ping(owner: String, name: String) -> bool {
+pub extern "C" fn ping(owner: &str, name: &str) -> bool {
     let secret_map_path = format!(
         "{}/{owner}-{name}.json",
         *META,
@@ -103,7 +103,7 @@ pub extern "C" fn ping(owner: String, name: String) -> bool {
 
 #[test]
 fn ping_check() {
-    let result = ping(PROG.to_string(), "dummy".to_string());
+    let result = ping(PROG, "dummy");
     assert_eq!(result, false);
 }
 
