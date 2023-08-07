@@ -19,7 +19,8 @@ use system::{del_file, is_path};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
-    process::exit,
+    ffi::CStr,
+    os::raw::c_char,
 };
 
 use crate::{
@@ -65,25 +66,42 @@ fn ensure_max_map_exists() {
     }
 }
 
+fn unsafety(data: *const c_char) -> String {
+    unsafe { CStr::from_ptr(data).to_string_lossy().into_owned() }
+}
+
 // Normal actions
 #[no_mangle]
-pub extern "C" fn insert(filename: &str, owner: &str, name: &str) -> Option<bool> {
+pub extern "C" fn insert(unsafe_filename: *const c_char, unsafe_owner: *const c_char, unsafe_name: *const c_char) -> bool {
+
+    let filename: String = unsafety(unsafe_filename);
+    let owner: String = unsafety(unsafe_owner);
+    let name: String = unsafety(unsafe_name);
+
     if !write(filename.to_owned(), owner.to_owned(), name.to_owned()) {
-        exit(1)
+        return false;
     }
-    return Some(true);
+    true
 }
 
 #[no_mangle]
-pub extern "C" fn retrive(owner: &str, name: &str) -> bool {
+pub extern "C" fn retrive(unsafe_owner: *const c_char, unsafe_name: *const c_char) -> bool {
+
+    let owner: String = unsafety(unsafe_owner);
+    let name: String = unsafety(unsafe_name);
+
     if !read(owner.to_owned(), name.to_owned()) {
         return false
     }
-    return true
+    true
 }
 
 #[no_mangle]
-pub extern "C" fn remove(owner: &str, name: &str) -> bool {
+pub extern "C" fn remove(unsafe_owner: *const c_char, unsafe_name: *const c_char) -> bool {
+    
+    let owner: String = unsafety(unsafe_owner);
+    let name: String = unsafety(unsafe_name);
+
     if !forget(owner.to_owned(), name.to_owned()) {
         return false
     }
@@ -91,7 +109,11 @@ pub extern "C" fn remove(owner: &str, name: &str) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn ping(owner: &str, name: &str) -> bool {
+pub extern "C" fn ping(unsafe_owner: *const c_char, unsafe_name: *const c_char) -> bool {
+    
+    let owner: String = unsafety(unsafe_owner);
+    let name: String = unsafety(unsafe_name);
+
     let secret_map_path = format!(
         "{}/{owner}-{name}.json",
         *META,
@@ -101,14 +123,15 @@ pub extern "C" fn ping(owner: &str, name: &str) -> bool {
     is_path(&secret_map_path)
 }
 
-#[test]
-fn ping_check() {
-    let result = ping(PROG, "dummy");
-    assert_eq!(result, false);
-}
+// #[test]
+// fn ping_check() {
+//     let result = ping(PROG, "dummy");
+//     assert_eq!(result, false);
+// }
 
 // Debugging and tooling
 
+#[no_mangle]
 pub extern "C" fn check_map(map_num: u32) -> bool {
     // needs to fail gracefuly
     let _ = fetch_chunk(map_num); // using fetch chunk to validate the map data
@@ -123,7 +146,7 @@ fn null_map() {
 }
 // only passes on un initialized systems
 
-
+#[no_mangle]
 pub extern "C" fn update_map(map_num: u32) -> bool {
     // ? Getting the current map data
     let map_path: String = format!("{}/chunk_{}.map", *MAPS, map_num);

@@ -2245,30 +2245,39 @@ extern "C" {
     pub fn getloadavg(__loadavg: *mut f64, __nelem: ::std::os::raw::c_int)
         -> ::std::os::raw::c_int;
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct Option_bool {
-    _unused: [u8; 0],
-}
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct String {
-    _unused: [u8; 0],
-}
 extern "C" {
     pub fn initialize();
 }
 extern "C" {
-    pub fn insert(filename: String, owner: String, name: String) -> Option_bool;
+    pub fn insert(
+        unsafe_filename: *const ::std::os::raw::c_char,
+        unsafe_owner: *const ::std::os::raw::c_char,
+        unsafe_name: *const ::std::os::raw::c_char,
+    ) -> bool;
 }
 extern "C" {
-    pub fn retrive(owner: String, name: String) -> Option_bool;
+    pub fn retrive(
+        unsafe_owner: *const ::std::os::raw::c_char,
+        unsafe_name: *const ::std::os::raw::c_char,
+    ) -> bool;
 }
 extern "C" {
-    pub fn remove(owner: String, name: String) -> Option_bool;
+    pub fn remove(
+        unsafe_owner: *const ::std::os::raw::c_char,
+        unsafe_name: *const ::std::os::raw::c_char,
+    ) -> bool;
 }
 extern "C" {
-    pub fn ping(owner: String, name: String) -> bool;
+    pub fn ping(
+        unsafe_owner: *const ::std::os::raw::c_char,
+        unsafe_name: *const ::std::os::raw::c_char,
+    ) -> bool;
+}
+extern "C" {
+    pub fn check_map(map_num: u32) -> bool;
+}
+extern "C" {
+    pub fn update_map(map_num: u32) -> bool;
 }
 pub type __builtin_va_list = [__va_list_tag; 1usize];
 #[repr(C)]

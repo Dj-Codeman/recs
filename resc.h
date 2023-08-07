@@ -15,16 +15,16 @@
 
 #define CHUNK_SIZE 16
 
-typedef struct Option_bool Option_bool;
-
-typedef struct String String;
-
 void initialize(void);
 
-struct Option_bool insert(struct String filename, struct String owner, struct String name);
+bool insert(const char *unsafe_filename, const char *unsafe_owner, const char *unsafe_name);
 
-struct Option_bool retrive(struct String owner, struct String name);
+bool retrive(const char *unsafe_owner, const char *unsafe_name);
 
-struct Option_bool remove(struct String owner, struct String name);
+bool remove(const char *unsafe_owner, const char *unsafe_name);
 
-bool ping(struct String owner, struct String name);
+bool ping(const char *unsafe_owner, const char *unsafe_name);
+
+bool check_map(uint32_t map_num);
+
+bool update_map(uint32_t map_num);
