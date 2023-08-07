@@ -40,7 +40,8 @@ fn check_debug() {
     env::set_var("RUST_BACKTRACE", "1");
 }
 
-pub fn initialize() {
+#[no_mangle]
+pub extern "C" fn initialize() {
     if DEBUG {
         check_debug();
     }
@@ -65,28 +66,32 @@ fn ensure_max_map_exists() {
 }
 
 // Normal actions
-pub fn insert(filename: String, owner: String, name: String) -> Option<bool> {
+#[no_mangle]
+pub extern "C" fn insert(filename: String, owner: String, name: String) -> Option<bool> {
     if !write(filename, owner, name) {
         exit(1)
     }
     return Some(true);
 }
 
-pub fn retrive(owner: String, name: String) -> Option<bool> {
+#[no_mangle]
+pub extern "C" fn retrive(owner: String, name: String) -> Option<bool> {
     if !read(owner, name) {
         exit(1);
     }
     return Some(true);
 }
 
-pub fn remove(owner: String, name: String) -> Option<bool> {
+#[no_mangle]
+pub extern "C" fn remove(owner: String, name: String) -> Option<bool> {
     if !forget(owner, name) {
         exit(1);
     }
     return Some(true);
 }
 
-pub fn ping(owner: String, name: String) -> bool {
+#[no_mangle]
+pub extern "C" fn ping(owner: String, name: String) -> bool {
     let secret_map_path = format!(
         "{}/{owner}-{name}.json",
         *META,
@@ -104,7 +109,7 @@ fn ping_check() {
 
 // Debugging and tooling
 
-pub fn check_map(map_num: u32) -> bool {
+pub extern "C" fn check_map(map_num: u32) -> bool {
     // needs to fail gracefuly
     let _ = fetch_chunk(map_num); // using fetch chunk to validate the map data
     return true;
@@ -119,7 +124,7 @@ fn null_map() {
 // only passes on un initialized systems
 
 
-pub fn update_map(map_num: u32) -> bool {
+pub extern "C" fn update_map(map_num: u32) -> bool {
     // ? Getting the current map data
     let map_path: String = format!("{}/chunk_{}.map", *MAPS, map_num);
 
@@ -167,12 +172,12 @@ pub fn update_map(map_num: u32) -> bool {
     return true;
 }
 
-// pub fn index_array() -> Option<bool> {
+// pub extern "C" fn index_array() -> Option<bool> {
 //     index_system_array();
 //     return Some(true);
 // }
 
-pub fn _get_array_props() {
+pub extern "C" fn _get_array_props() {
     // reading part of the array
     // get version
     // add a hash somewhere
