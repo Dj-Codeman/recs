@@ -5,7 +5,7 @@ use std::{
 };
 use logging::append_log;
 use serde::{Serialize, Deserialize};
-use system::{del_dir, is_path};
+use system::{del_dir, is_path, del_file};
 
 use crate::{
     config::{
@@ -136,7 +136,7 @@ pub fn index_system_array() -> bool {
                 );
 
                 if is_path(&chunk_map_path) {
-                    del_dir(&chunk_map_path);
+                    del_file(&chunk_map_path);
                 }
 
                 let pretty_chunk_map =
