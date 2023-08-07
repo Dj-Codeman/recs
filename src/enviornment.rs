@@ -1,4 +1,4 @@
-use std::fs::{create_dir_all, remove_dir_all};
+use nix::unistd::geteuid;
 use logging::{append_log, start_log};
 use sysinfo::{System, SystemExt};
 use system::{is_path, del_dir, make_dir, make_dir_perm}; // for finding free ram for vectors
@@ -32,10 +32,10 @@ pub fn set_system() {
 
 pub fn make_folders() {
     // * Verifing path exists and creating missing ones 
-    let system_path = "/var/recs";
+    let system_path = format!("/var/recs/{}/", geteuid());
     let permissions = 0o700;
 
-    match make_dir_perm(system_path, permissions) {
+    match make_dir_perm(&system_path, permissions) {
         Ok(()) => () ,
         Err(err) => eprintln!("{}", err),
     }
