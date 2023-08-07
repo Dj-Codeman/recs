@@ -3,7 +3,7 @@ use logging::append_log;
 // use rand::distributions::{Distribution, Uniform};
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
-use system::{del_dir, is_path};
+use system::{del_dir, is_path, del_file};
 use std::{
     fs::{read_to_string, OpenOptions},
     io::Write,
@@ -62,10 +62,10 @@ pub fn generate_user_key() -> bool {
     let cipher_integrity: String = encrypt(secret, userkey, 1024);
     // ! ^ this will be static since key sizes are really small
 
-    
     if is_path(&USER_KEY_LOCATION){
-     del_dir(&USER_KEY_LOCATION);
+        del_file(&USER_KEY_LOCATION);
     }
+
     // creating the master.json file
     let mut userkey_file = OpenOptions::new()
         .create_new(true)
