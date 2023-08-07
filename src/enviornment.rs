@@ -1,7 +1,7 @@
 use std::fs::{create_dir_all, remove_dir_all};
 use logging::{append_log, start_log};
 use sysinfo::{System, SystemExt};
-use system::{is_path, del_dir, make_dir}; // for finding free ram for vectors
+use system::{is_path, del_dir, make_dir, make_dir_perm}; // for finding free ram for vectors
 
 use crate::{
     auth::generate_user_key,
@@ -32,7 +32,13 @@ pub fn set_system() {
 
 pub fn make_folders() {
     // * Verifing path exists and creating missing ones 
-    create_dir_all("/var/recs").expect("making folders failed"); // make this dynamic
+    let system_path = "/var/recs";
+    let permissions = 0o700;
+
+    match make_dir_perm(system_path, permissions) {
+        Ok(()) => () ,
+        Err(err) => eprintln!("{}", err),
+    }
 
     let mut paths = vec![];
     paths.insert(0, DATA_DIRECTORY);
