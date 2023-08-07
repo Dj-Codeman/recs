@@ -33,7 +33,7 @@ pub fn set_system() {
 pub fn make_folders() {
     // * Verifing path exists and creating missing ones 
     let system_path = format!("/var/recs/{}/", geteuid());
-    let permissions = 0o700;
+    let permissions = 0o770;
 
     match make_dir_perm(&system_path, permissions) {
         Ok(()) => () ,

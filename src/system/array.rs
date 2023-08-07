@@ -5,7 +5,7 @@ use std::{
 };
 use logging::append_log;
 use serde::{Serialize, Deserialize};
-use system::del_dir;
+use system::{del_dir, is_path};
 
 use crate::{
     config::{
@@ -135,7 +135,9 @@ pub fn index_system_array() -> bool {
                     chunk_number
                 );
 
-                del_dir(&chunk_map_path);
+                if is_path(&chunk_map_path) {
+                    del_dir(&chunk_map_path);
+                }
 
                 let pretty_chunk_map =
                     serde_json::to_string_pretty(&chunk_map).expect("JSON serialization failed");
