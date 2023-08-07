@@ -5,7 +5,7 @@
 pub const DEBUG: bool = true;
 
 
-pub const SYSTEM_ARRAY_LOCATION: &str = "/var/recs/array.recs";
+pub const SYSTEM_ARRAY_LOCATION: &str = "/usr/recs/array.recs";
 
 	//	The user key is derived from the users specific password
 	//	This is the key used to encrypt the files while
@@ -14,7 +14,7 @@ pub const SYSTEM_ARRAY_LOCATION: &str = "/var/recs/array.recs";
 	//  $datadir will be illegible
 	//  IF THIS KEY IS DELETED ALL DATA IS CONSIDERED LOST
 
-pub const USER_KEY_LOCATION: &str = "/var/recs/userdata.recs";
+pub const USER_KEY_LOCATION: &str = "/usr/recs/userdata.recs";
 
 	// currently for debuging 
 	// the stream buffer will be dynamically assigned at runtime
