@@ -65,15 +65,16 @@ pub const SOFT_MOVE_FILES: bool = false;
 
 pub const LEAVE_IN_PEACE: bool = false;
 
-	// PRE DEFINED SECRET 
-	// if you use recs when no password can be input the userkey prompt can 
-	// be skipped by defining a a secret value here 
-	// THIS IS LESS SECURE BECAUSE THE KEY IS TECHNICALLY STORED ON THE MACHINE
+	// ARRAY_LEN 
+	// the array_len const is a multiple of the chunk size. It determines how many 
+	// chunks the system has to use for cryptographics functions. The higher the
+	// size the less likely files are to share a common key.
 
-// TODO use this somewhere
-pub const USE_PRE_DEFINED_USERKEY: bool = true; // ! setting to false will break everithing
-pub const PRE_DEFINED_USERKEY: &str = "ReplaceMe1!";
-
-// TODO add notes
 pub const ARRAY_LEN: u32 = 80963;
+
+
+	// Will document one day. the underline technology is aes-256-cbc
+	// alot of weird descions led to this needing to be defined but 
+	// dont change this unless your rewriting half of this progect
+	
 pub const CHUNK_SIZE: u32 = 16; //5060

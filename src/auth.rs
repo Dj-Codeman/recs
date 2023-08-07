@@ -13,10 +13,10 @@ use std::{
 
 use crate::{
     config::{
-        PRE_DEFINED_USERKEY, PUBLIC_MAP_DIRECTORY,
-        USER_KEY_LOCATION, USE_PRE_DEFINED_USERKEY,
+        PUBLIC_MAP_DIRECTORY,
+        USER_KEY_LOCATION,
     },
-    encrypt::{create_hash, decrypt, encrypt}, local_env::{PROG, VERSION}, array_tools::fetch_chunk,
+    encrypt::{create_hash, decrypt, encrypt}, local_env::{PROG, VERSION}, array_tools::fetch_chunk, array::array_arimitics,
 };
 
 // pbkdf Generator specs
@@ -41,19 +41,18 @@ pub fn generate_user_key() -> bool {
     // ! this is a key and a integrity check. the key is not stored but it is tested against a encrypted value
 
     let salt: String = fetch_chunk(1);
+    let secret: String = fetch_chunk(array_arimitics() - 1);
     let num: u32 = "95180".parse().expect("Not a number!");
     let iteration = std::num::NonZeroU32::new(num).unwrap();
     let mut password_key = [0; 16]; // Setting the key size
 
-    if USE_PRE_DEFINED_USERKEY {
-        pbkdf2::derive(
-            PBKDF2_ALG,
-            iteration,
-            salt.as_bytes(),
-            PRE_DEFINED_USERKEY.as_bytes(),
-            &mut password_key,
-        );
-    }
+    pbkdf2::derive(
+        PBKDF2_ALG,
+        iteration,
+        salt.as_bytes(),
+        secret.as_bytes(),
+        &mut password_key,
+    );
 
     let userkey = hex::encode(&password_key);
     // * creating the integrity file
@@ -127,10 +126,8 @@ pub fn auth_user_key() -> String {
     // ! patched to just used fixed key
     append_log(PROG,"user key authentication request started");
 
-    let password_0 = PRE_DEFINED_USERKEY;
-
-    // ? turning password_0 into the pbkey
     let salt: String = fetch_chunk(1);
+    let secret: String = fetch_chunk(array_arimitics() - 1);
     let num: u32 = "95180".parse().expect("Not a number!");
     let iteration = std::num::NonZeroU32::new(num).unwrap();
     let mut password_key = [0; 16]; // Setting the key size
@@ -139,7 +136,7 @@ pub fn auth_user_key() -> String {
         PBKDF2_ALG,
         iteration,
         salt.as_bytes(),
-        password_0.as_bytes(),
+        secret.as_bytes(),
         &mut password_key,
     );
 

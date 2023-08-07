@@ -128,7 +128,7 @@ pub fn write(filename: String, secret_owner: String, secret_name: String) -> boo
         .open(secret_path.clone());
 
         match secret_file {
-            Ok(_) => eprintln!("Error while writing please check log"),
+            Ok(_) => (),
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 eprintln!("Error while writing please check log");
             },
