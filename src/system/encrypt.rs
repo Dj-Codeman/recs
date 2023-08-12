@@ -78,6 +78,7 @@ pub fn decrypt(cipherdata: String, key: String) -> String {
     // getting old and new hmac values
     let old_hmac = cipherdata.substring(cipherdata_len, cipherdata_len + 64);
     let new_hmac: String = create_hmac(cipherdata_hmacless.clone());
+    println!("Showing hmacs");
     eprintln!("{}", old_hmac);
     eprintln!("{}", new_hmac);
 
