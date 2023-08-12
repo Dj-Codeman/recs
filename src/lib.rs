@@ -19,8 +19,7 @@ use system::{del_file, is_path};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
-    ffi::CStr,
-    os::raw::c_char,
+    process::exit,
 };
 
 use crate::{
@@ -41,8 +40,7 @@ fn check_debug() {
     env::set_var("RUST_BACKTRACE", "1");
 }
 
-#[no_mangle]
-pub extern "C" fn initialize() {
+pub fn initialize() {
     if DEBUG {
         check_debug();
     }
@@ -66,54 +64,29 @@ fn ensure_max_map_exists() {
     }
 }
 
-fn unsafety(data: *const c_char) -> String {
-    unsafe { CStr::from_ptr(data).to_string_lossy().into_owned() }
-}
-
 // Normal actions
-#[no_mangle]
-pub extern "C" fn insert(unsafe_filename: *const c_char, unsafe_owner: *const c_char, unsafe_name: *const c_char) -> bool {
-
-    let filename: String = unsafety(unsafe_filename);
-    let owner: String = unsafety(unsafe_owner);
-    let name: String = unsafety(unsafe_name);
-
-    if !write(filename.to_owned(), owner.to_owned(), name.to_owned()) {
-        return false;
+pub fn insert(filename: String, owner: String, name: String) -> Option<bool> {
+    if !write(filename, owner, name) {
+        exit(1)
     }
-    true
+    return Some(true);
 }
 
-#[no_mangle]
-pub extern "C" fn retrive(unsafe_owner: *const c_char, unsafe_name: *const c_char) -> bool {
-
-    let owner: String = unsafety(unsafe_owner);
-    let name: String = unsafety(unsafe_name);
-
-    if !read(owner.to_owned(), name.to_owned()) {
-        return false
+pub fn retrive(owner: String, name: String) -> Option<bool> {
+    if !read(owner, name) {
+        exit(1);
     }
-    true
+    return Some(true);
 }
 
-#[no_mangle]
-pub extern "C" fn remove(unsafe_owner: *const c_char, unsafe_name: *const c_char) -> bool {
-    
-    let owner: String = unsafety(unsafe_owner);
-    let name: String = unsafety(unsafe_name);
-
-    if !forget(owner.to_owned(), name.to_owned()) {
-        return false
+pub fn remove(owner: String, name: String) -> Option<bool> {
+    if !forget(owner, name) {
+        exit(1);
     }
-    true
+    return Some(true);
 }
 
-#[no_mangle]
-pub extern "C" fn ping(unsafe_owner: *const c_char, unsafe_name: *const c_char) -> bool {
-    
-    let owner: String = unsafety(unsafe_owner);
-    let name: String = unsafety(unsafe_name);
-
+pub fn ping(owner: String, name: String) -> bool {
     let secret_map_path = format!(
         "{}/{owner}-{name}.json",
         *META,
@@ -123,16 +96,15 @@ pub extern "C" fn ping(unsafe_owner: *const c_char, unsafe_name: *const c_char) 
     is_path(&secret_map_path)
 }
 
-// #[test]
-// fn ping_check() {
-//     let result = ping(PROG, "dummy");
-//     assert_eq!(result, false);
-// }
+#[test]
+fn ping_check() {
+    let result = ping(PROG.to_string(), "dummy".to_string());
+    assert_eq!(result, false);
+}
 
 // Debugging and tooling
 
-#[no_mangle]
-pub extern "C" fn check_map(map_num: u32) -> bool {
+pub fn check_map(map_num: u32) -> bool {
     // needs to fail gracefuly
     let _ = fetch_chunk(map_num); // using fetch chunk to validate the map data
     return true;
@@ -146,8 +118,8 @@ fn null_map() {
 }
 // only passes on un initialized systems
 
-#[no_mangle]
-pub extern "C" fn update_map(map_num: u32) -> bool {
+
+pub fn update_map(map_num: u32) -> bool {
     // ? Getting the current map data
     let map_path: String = format!("{}/chunk_{}.map", *MAPS, map_num);
 
@@ -195,12 +167,12 @@ pub extern "C" fn update_map(map_num: u32) -> bool {
     return true;
 }
 
-// pub extern "C" fn index_array() -> Option<bool> {
+// pub fn index_array() -> Option<bool> {
 //     index_system_array();
 //     return Some(true);
 // }
 
-pub extern "C" fn _get_array_props() {
+pub fn _get_array_props() {
     // reading part of the array
     // get version
     // add a hash somewhere

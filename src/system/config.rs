@@ -2,7 +2,7 @@
 	// DEBUG
 	// show in depth stack info on panics
 
-pub const DEBUG: bool = false;
+pub const DEBUG: bool = true;
 
 
 pub const SYSTEM_ARRAY_LOCATION: &str = "/usr/recs/array.recs";
