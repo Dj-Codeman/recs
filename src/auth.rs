@@ -137,9 +137,7 @@ pub fn auth_user_key() -> String {
     let secret: String = "The hotdog man isn't real !?".to_string();
     // ! make the read the userkey from the map in the future
     let verification_ciphertext: String =
-        read_to_string(format!("{}/userkey.map", *MAPS)).expect("Couldn't read the map file");
-
-        eprintln!("Contents of the file {}", read_to_string(format!("{}/userkey.map", *MAPS)).unwrap());
+        read_to_string(USER_KEY_LOCATION).expect("Couldn't read the map file");
 
     let verification_result: String =
         decrypt(verification_ciphertext.to_string(), userkey.clone());
