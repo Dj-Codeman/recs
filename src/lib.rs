@@ -88,7 +88,7 @@ pub fn remove(owner: String, name: String) -> Option<bool> {
 
 pub fn ping(owner: String, name: String) -> bool {
     let secret_map_path = format!(
-        "{}/{owner}-{name}.json",
+        "{}/{owner}-{name}.meta",
         *META,
         owner = owner,
         name = name
