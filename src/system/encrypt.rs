@@ -78,6 +78,8 @@ pub fn decrypt(cipherdata: String, key: String) -> String {
     // getting old and new hmac values
     let old_hmac = cipherdata.substring(cipherdata_len, cipherdata_len + 64);
     let new_hmac: String = create_hmac(cipherdata_hmacless.clone());
+    eprintln!("{}", old_hmac);
+    eprintln!("{}", new_hmac);
 
     // verifing hmac
     if old_hmac == new_hmac {
@@ -115,6 +117,12 @@ fn create_hmac(cipherdata: String) -> String {
 
     mac.update(cipherdata.as_bytes());
     let hmac = truncate(&hex::encode(mac.finalize().into_bytes()), 64).to_string();
+
+    if hmac.len() >= 65 {
+        eprintln!("Invalid hmac generated");
+    } else if hmac.len() <= 63 {
+        eprintln!("HMAC TO SMALL");
+    }
 
     return hmac;
 }
