@@ -139,6 +139,8 @@ pub fn auth_user_key() -> String {
     let verification_ciphertext: String =
         read_to_string(format!("{}/userkey.map", *MAPS)).expect("Couldn't read the map file");
 
+        eprintln!("Contents of the file {}", format!("{}/userkey.map", *MAPS) );
+
     let verification_result: String =
         decrypt(verification_ciphertext.to_string(), userkey.clone());
 
