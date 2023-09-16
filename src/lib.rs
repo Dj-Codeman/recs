@@ -3,7 +3,7 @@ mod auth;
 #[path = "system/config.rs"]
 mod config;
 #[path = "system/encrypt.rs"]
-pub mod encrypt;
+mod encrypt;
 #[path = "enviornment.rs"]
 mod local_env;
 #[path = "system/secrets.rs"]
@@ -13,7 +13,7 @@ mod array;
 #[path = "system/array_retrive.rs"]
 mod array_tools;
 
-use logging::append_log;
+use logging::{append_log, start_log};
 use system::{del_file, is_path};
 
 use std::{
@@ -41,6 +41,7 @@ fn check_debug() {
 }
 
 pub fn initialize() {
+    start_log(PROG);
     if DEBUG {
         check_debug();
     }
