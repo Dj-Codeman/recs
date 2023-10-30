@@ -1,15 +1,16 @@
-use rand::distributions::Distribution;
 use logging::append_log;
+use pretty::warn;
+use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
 use crate::array::{array_arimitics, ChunkMap};
-use crate::config::{SYSTEM_ARRAY_LOCATION, CHUNK_SIZE};
+use crate::config::{CHUNK_SIZE, SYSTEM_ARRAY_LOCATION};
 use crate::encrypt::create_hash;
-use crate::local_env::{VERSION, PROG, MAPS};
+use crate::local_env::{MAPS, PROG, VERSION};
 
-pub fn fetch_chunk(num: u32) -> String {
+pub fn fetch_chunk(num: u32) -> Option<String> {
     let upper_limit = array_arimitics();
     let lower_limit = 1;
 
@@ -25,29 +26,58 @@ pub fn fetch_chunk(num: u32) -> String {
     return fetch_chunk_by_number(map_num);
 }
 
-fn fetch_chunk_by_number(map_num: u32) -> String {
+fn fetch_chunk_by_number(map_num: u32) -> Option<String> {
     let map_path = format!("{}/chunk_{}.map", *MAPS, map_num);
 
-    let map_data = read_map_data(&map_path);
+    // if data is return then we verify it
+    let chunk: Option<String> = match read_map_data(&map_path) {
+        (true, None) => None,
+        (true, Some(data)) => {
+            // verify map data
+            let pretty_map_data = parse_map_data(&data);
+            verify_map_version(&pretty_map_data);
 
-    let pretty_map_data = parse_map_data(&map_data);
-
-    verify_map_version(&pretty_map_data);
-
-    let chunk = read_chunk_data(&pretty_map_data);
-
-    verify_chunk_integrity(&chunk, &pretty_map_data);
+            let chunk = read_chunk_data(&pretty_map_data);
+            verify_chunk_integrity(&chunk, &pretty_map_data);
+            Some(chunk)
+        }
+        (false, None) => None,
+        (false, Some(_)) => None,
+    };
 
     chunk
 }
 
-fn read_map_data(map_path: &str) -> String {
-    let mut map_file = File::open(map_path).expect("File could not be opened");
-    let mut map_data = String::new();
-    map_file
-        .read_to_string(&mut map_data)
-        .expect("Could not read the map file !");
-    map_data
+fn read_map_data(map_path: &str) -> (bool, Option<String>) {
+    // Get the file ref from the os is it exists
+    let optional_map_file: Option<File> = match File::open(map_path) {
+        Ok(d) => Some(d),
+        Err(e) => {
+            warn(&format!("{}", e));
+            None
+        }
+    };
+
+    // reading the data if the file above exists
+    let optional_map_data: Option<String> = match optional_map_file {
+        Some(mut file_ref) => {
+            // defining a buffer to unpack data to
+            let mut file_data_buffer: String = String::new();
+
+            match file_ref.read_to_string(&mut file_data_buffer) {
+                Ok(_) => Some(file_data_buffer), // return the buffer we just populated
+                Err(_) => None,
+            }
+        }
+        None => None,
+    };
+
+    let returning_tuple: (bool, Option<String>) = match optional_map_data {
+        Some(data) => (true, Some(data)),
+        None => (false, None),
+    };
+
+    returning_tuple
 }
 
 fn parse_map_data(map_data: &str) -> ChunkMap {
@@ -68,6 +98,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap) -> String {
     let chunk_end = pretty_map_data.chunk_end;
     let mut buffer = vec![0; CHUNK_SIZE as usize];
 
+    #[allow(unused_assignments)] // * cheap fix
     let mut chunk = String::new();
     let mut file = File::open(SYSTEM_ARRAY_LOCATION).unwrap();
 

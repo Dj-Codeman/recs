@@ -2,13 +2,14 @@ use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex;
 use hmac::{Hmac, Mac};
+use pretty::halt;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::{Digest, Sha256};
-use system::truncate;
-use std::{str, process::exit};
+use std::{process::exit, str};
 use substring::Substring;
+use system::truncate;
 
-use crate::{array_tools::fetch_chunk, config::ARRAY_LEN };
+use crate::{array_tools::fetch_chunk, config::ARRAY_LEN};
 
 pub type Aes256Cbc = Cbc<Aes256, Pkcs7>;
 
@@ -98,7 +99,6 @@ pub fn decrypt(cipherdata: String, key: String) -> String {
             .unwrap();
         // turn it back into text
         return str::from_utf8(decrypted_ciphertext).unwrap().to_string();
-
     } else {
         // Breaking because the hmac isn't valid // ! add the right exit
         eprintln!("INVALID HMAC. TAMPERING DETECTED");
@@ -111,7 +111,18 @@ fn create_hmac(cipherdata: String) -> String {
     type HmacSha256 = Hmac<Sha256>;
 
     // when the hmac is verified we check aginst the systemkey
-    let mut mac = HmacSha256::new_from_slice(fetch_chunk(1).as_bytes()).expect("An error occoured");
+    // * in the case of the chunk being illegible we do some screening
+    let chunk_data: Option<String> = match fetch_chunk(1) {
+        Some(data) => Some(data),
+        None => None,
+    };
+
+    if chunk_data == None {
+        halt(&format!("Failed to fetch chunk data for number 1"));
+    };
+
+    let mut mac =
+        HmacSha256::new_from_slice(chunk_data.unwrap().as_bytes()).expect("An error occoured");
 
     mac.update(cipherdata.as_bytes());
     let hmac = truncate(&hex::encode(mac.finalize().into_bytes()), 64).to_string();

@@ -1,3 +1,7 @@
+#[path = "system/array.rs"]
+mod array;
+#[path = "system/array_retrive.rs"]
+mod array_tools;
 #[path = "auth.rs"]
 mod auth;
 #[path = "system/config.rs"]
@@ -8,12 +12,10 @@ mod encrypt;
 mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
-#[path = "system/array.rs"]
-mod array;
-#[path = "system/array_retrive.rs"]
-mod array_tools;
 
 use logging::{append_log, start_log};
+use pretty::{halt, warn, output};
+use secret::write_raw;
 use system::{del_file, is_path};
 
 use std::{
@@ -23,14 +25,11 @@ use std::{
 };
 
 use crate::{
-    array_tools::fetch_chunk,
     array::{index_system_array, ChunkMap},
-    config::{
-        ARRAY_LEN, CHUNK_SIZE, DEBUG,
-        SYSTEM_ARRAY_LOCATION,
-    },
+    array_tools::fetch_chunk,
+    config::{ARRAY_LEN, CHUNK_SIZE, DEBUG, SYSTEM_ARRAY_LOCATION},
     encrypt::create_hash,
-    local_env::{set_system, PROG, VERSION, MAPS, META},
+    local_env::{set_system, MAPS, META, PROG, VERSION},
     secret::{forget, read, write},
 };
 
@@ -66,11 +65,17 @@ fn ensure_max_map_exists() {
 }
 
 // Normal actions
+// TODO identify if exit0 is appropriate and revisit
 pub fn insert(filename: String, owner: String, name: String) -> Option<bool> {
-    if !write(filename, owner, name) {
-        exit(1)
+    match write(filename, owner, name) {
+        (true, None) => {
+            eprintln!("Encryption succeded but no key was provided");
+            exit(1)
+        }
+        (true, Some(_)) => return Some(true),
+        (false, None) => exit(1),
+        (false, Some(_)) => exit(1),
     }
-    return Some(true);
 }
 
 pub fn retrive(owner: String, name: String) -> Option<bool> {
@@ -88,13 +93,40 @@ pub fn remove(owner: String, name: String) -> Option<bool> {
 }
 
 pub fn ping(owner: String, name: String) -> bool {
-    let secret_map_path = format!(
-        "{}/{owner}-{name}.meta",
-        *META,
-        owner = owner,
-        name = name
-    );
+    let secret_map_path = format!("{}/{owner}-{name}.meta", *META, owner = owner, name = name);
     is_path(&secret_map_path)
+}
+
+pub fn encrypt_raw(data: String) -> bool {
+    let results: bool = match write_raw(data) {
+        (None, None) => {
+            warn("No data provided");
+            false
+        }
+        (None, Some(_)) => {
+            warn("Useless data provided");
+            false
+        }
+        (Some(_), None) => {
+            warn("Useless data provided");
+            false
+        }
+        (Some(key), Some(data)) => {
+            output(
+                "BLUE",
+                &format!(
+                    "The requested data is as follows :\nRecs key: {}\nRecs data: {}",
+                    key, data
+                ),
+            );
+            true
+        }
+    };
+    results
+}
+
+pub fn decrypt_raw(_recs_data: String, _recs_key: String) -> bool {
+    true
 }
 
 #[test]
@@ -107,23 +139,23 @@ fn ping_check() {
 
 pub fn check_map(map_num: u32) -> bool {
     // needs to fail gracefuly
-    let _ = fetch_chunk(map_num); // using fetch chunk to validate the map data
-    return true;
+    if fetch_chunk(map_num) == None {
+        false
+    } else {
+        true
+    }
 }
 
 #[test]
-#[ignore = "Not implemented correctly"]
 fn null_map() {
-    let result = check_map(0);
+    let result = check_map(8000000);
     assert_eq!(result, false);
 }
 // only passes on un initialized systems
 
-
 pub fn update_map(map_num: u32) -> bool {
     // ? Getting the current map data
     let map_path: String = format!("{}/chunk_{}.map", *MAPS, map_num);
-
 
     // ? Reading the map
     let mut map_file = File::open(&map_path).expect("File could not be opened");
@@ -137,14 +169,31 @@ pub fn update_map(map_num: u32) -> bool {
     let pretty_map_data: ChunkMap = serde_json::from_str(&map_data).unwrap();
 
     // ? calculating new hash
-    let new_hash = create_hash(&fetch_chunk(map_num));
+    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num) {
+        Some(data) => (true, Some(data)),
+        None => (false, None),
+    };
+
+    let new_hash: Option<String> = match chunk_data {
+        (true, None) => None,
+        (true, Some(chunk)) => Some(create_hash(&chunk)),
+        (false, None) => None,
+        (false, Some(_)) => None,
+    };
+
+    if new_hash == None {
+        halt(&format!(
+            "Failed to fetch chunk data for number {}",
+            &map_num
+        ));
+    }
 
     //  making new map
     let new_map: ChunkMap = ChunkMap {
         location: pretty_map_data.location,
         version: VERSION.to_string(),
         chunk_num: pretty_map_data.chunk_num,
-        chunk_hsh: new_hash,
+        chunk_hsh: new_hash.unwrap(),
         chunk_beg: pretty_map_data.chunk_beg,
         chunk_end: pretty_map_data.chunk_end,
     };
@@ -167,11 +216,6 @@ pub fn update_map(map_num: u32) -> bool {
 
     return true;
 }
-
-// pub fn index_array() -> Option<bool> {
-//     index_system_array();
-//     return Some(true);
-// }
 
 pub fn _get_array_props() {
     // reading part of the array

@@ -1,3 +1,4 @@
+use pretty::halt;
 use hex;
 use logging::append_log;
 // use rand::distributions::{Distribution, Uniform};
@@ -38,8 +39,8 @@ pub struct KeyIndex {
 pub fn generate_user_key() -> bool {
     // ! this is a key and a integrity check. the key is not stored but it is tested against a encrypted value
 
-    let salt: String = fetch_chunk(1);
-    let secret: String = fetch_chunk(array_arimitics() - 1);
+    let salt: String = fetch_chunk_helper(1);
+    let secret: String = fetch_chunk_helper(array_arimitics() - 1);
     let num: u32 = "95180".parse().expect("Not a number!");
     let iteration = std::num::NonZeroU32::new(num).unwrap();
     let mut password_key = [0; 16]; // Setting the key size
@@ -119,8 +120,8 @@ pub fn auth_user_key() -> String {
     // ! patched to just used fixed key
     append_log(PROG,"user key authentication request started");
 
-    let salt: String = fetch_chunk(1);
-    let secret: String = fetch_chunk(array_arimitics() - 1);
+    let salt: String = fetch_chunk_helper(1);
+    let secret: String = fetch_chunk_helper(array_arimitics() - 1);
     let num: u32 = "95180".parse().expect("Not a number!");
     let iteration = std::num::NonZeroU32::new(num).unwrap();
     let mut password_key = [0; 16]; // Setting the key size
@@ -162,7 +163,7 @@ pub fn create_writing_key(key: String) -> String {
 
     let prekey = create_hash(&prekey_str);
 
-    let salt: String = fetch_chunk(1);
+    let salt: String = fetch_chunk_helper(1);
     let num: u32 = "95180".parse().expect("Not a number!");
     let iteration = std::num::NonZeroU32::new(num).unwrap();
     let mut final_key = [0; 16];
@@ -176,4 +177,18 @@ pub fn create_writing_key(key: String) -> String {
     );
 
     return hex::encode(final_key);
+}
+
+// * helper funtion for fetching chunks 
+fn fetch_chunk_helper(num: u32) -> String {
+    let chunk_data: Option<String> = match fetch_chunk(num) {
+        Some(data) => Some(data),
+        None => None,
+    };
+
+    if chunk_data == None {
+        halt(&format!("Failed to fetch chunk data for number 1"));
+    };
+
+    chunk_data.unwrap()
 }

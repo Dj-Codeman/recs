@@ -28,6 +28,6 @@ substring = "1.4.5"
 sysinfo = "0.28.1"
 # nix = "0.23.0"
 lazy_static = "1.4.0"
-#pretty = { git = "https://github.com/Dj-Codeman/pretty.git" }
+pretty = { git = "https://github.com/Dj-Codeman/pretty.git" }
 logging = { git = "https://github.com/Dj-Codeman/logger.git" }
 system = { git = "https://github.com/Dj-Codeman/system.git" }

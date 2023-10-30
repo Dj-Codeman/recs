@@ -383,6 +383,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
+name = "pretty"
+version = "0.1.0"
+source = "git+https://github.com/Dj-Codeman/pretty.git#45be7d2c78df0b95b3a460ce17e906d157af6f4d"
+
+[[package]]
 name = "proc-macro-hack"
 version = "0.5.20+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -469,6 +474,7 @@ dependencies = [
  "hmac",
  "lazy_static",
  "logging",
+ "pretty",
  "rand",
  "rand_core",
  "ring",
