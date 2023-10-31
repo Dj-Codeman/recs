@@ -14,7 +14,6 @@ mod local_env;
 mod secret;
 
 use logging::{append_log, start_log};
-use pretty::{halt, warn, output};
 use secret::write_raw;
 use system::{del_file, is_path};
 
@@ -97,30 +96,21 @@ pub fn ping(owner: String, name: String) -> bool {
     is_path(&secret_map_path)
 }
 
-pub fn encrypt_raw(data: String) -> bool {
-    let results: bool = match write_raw(data) {
+pub fn encrypt_raw(data: String) -> (Option<String>, Option<String>) {
+    let results: (Option<String>, Option<String>) = match write_raw(data) {
         (None, None) => {
-            warn("No data provided");
-            false
+            eprintln!("No data provided");
+            (None, None)
         }
         (None, Some(_)) => {
-            warn("Useless data provided");
-            false
+            eprintln!("Useless data provided");
+            (None, None)
         }
         (Some(_), None) => {
-            warn("Useless data provided");
-            false
+            eprintln!("Useless data provided");
+            (None, None)
         }
-        (Some(key), Some(data)) => {
-            output(
-                "BLUE",
-                &format!(
-                    "The requested data is as follows :\nRecs key: {}\nRecs data: {}",
-                    key, data
-                ),
-            );
-            true
-        }
+        (Some(key), Some(data)) => (Some(key), Some(data)),
     };
     results
 }
@@ -182,10 +172,7 @@ pub fn update_map(map_num: u32) -> bool {
     };
 
     if new_hash == None {
-        halt(&format!(
-            "Failed to fetch chunk data for number {}",
-            &map_num
-        ));
+        eprint!("Failed to fetch chunk data for number {}", &map_num);
     }
 
     //  making new map

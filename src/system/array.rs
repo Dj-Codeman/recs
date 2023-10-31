@@ -97,6 +97,7 @@ pub fn index_system_array() -> bool {
     let mut chunk_number: u32 = 1;
     let mut range_start: u32 = BEG_CHAR;
     let mut range_end: u32 = BEG_CHAR + CHUNK_SIZE as u32;
+    #[allow(unused_assignments)] // * cheap fix
     let mut chunk: String = String::new();
 
     let mut file = File::open(SYSTEM_ARRAY_LOCATION).expect("Failed to open file");
@@ -160,7 +161,7 @@ pub fn index_system_array() -> bool {
         }
 
         chunk_number += 1;
-        chunk = "".to_string();
+        // chunk = "".to_string();
         range_start = range_end;
         range_end += CHUNK_SIZE as u32;
     }
