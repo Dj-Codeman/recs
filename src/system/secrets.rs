@@ -1,6 +1,6 @@
 use hex::encode;
 use logging::append_log;
-use pretty::{halt, notice};
+use pretty::halt;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -279,7 +279,6 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>) {
             let cipher_map_data =
                 read_to_string(secret_map_path).expect("Couldn't read the map file");
             let secret_map_data = decrypt(cipher_map_data, fetch_chunk_helper(1));
-            notice(&secret_map_data); // ! TESTING
             let secret_map: SecretDataIndex = serde_json::from_str(&secret_map_data).unwrap();
             // pulling info from the map
             // ensure the data is there
