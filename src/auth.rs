@@ -187,6 +187,7 @@ fn fetch_chunk_helper(num: u32) -> String {
     };
 
     if chunk_data == None {
+        append_log(PROG, &format!("Error could not fetch the key: {}", num));
         halt(&format!("Failed to fetch chunk data for number 1"));
     };
 
