@@ -44,7 +44,7 @@ pub fn write(
     //TODO Dep or simplyfy
     let max_buffer_size = calc_buffer();
     let file_size = metadata(filename.clone())
-        .expect("an unknown error occoured")
+        .expect(&format!("An error occoured while getting metadata from {}", &filename))
         .len();
     let fit_buffer: usize = (file_size / 4).try_into().unwrap();
     let buffer_size: usize = if fit_buffer <= max_buffer_size {
