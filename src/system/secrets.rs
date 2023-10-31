@@ -1,11 +1,11 @@
 use hex::encode;
 use logging::append_log;
-use pretty::halt;
+use pretty::{halt, notice};
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
-    io::{prelude::*, SeekFrom, Write},
+    io::{prelude::*, Result, SeekFrom, Write},
     path::Path,
     process::exit,
 };
@@ -249,19 +249,18 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>) {
     // write the data to the file
 
     // ! making the secret path to append data too
-    let mut dummy_file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .append(true)
-        .open(dummy_path.clone());
+    let dummy_file: Option<File> = match File::create(dummy_path) {
+        Ok(f) => Some(f),
+        Err(_) => None,
+    };
 
-    write!(
-        dummy_file.as_mut().expect("Something went wrong"),
-        "{}",
-        data
-    )
-    .expect("An error occoured while writing to the tmp file ");
+    // writing when made
+    let _ = match dummy_file {
+        Some(mut file) => file.write_all(format!("{}", data).as_bytes()),
+        None => Ok(()), // This works ??
+    };
 
+    // encrypting the dummy file
     let results: (bool, Option<String>) = write(
         dummy_path.to_owned(),
         dummy_owner.to_string(),
@@ -279,7 +278,8 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>) {
             // decrypting and reading
             let cipher_map_data =
                 read_to_string(secret_map_path).expect("Couldn't read the map file");
-            let secret_map_data = decrypt(cipher_map_data, fetch_chunk_helper(1).to_string());
+            let secret_map_data = decrypt(cipher_map_data, fetch_chunk_helper(1));
+            notice(&secret_map_data); // ! TESTING
             let secret_map: SecretDataIndex = serde_json::from_str(&secret_map_data).unwrap();
             // pulling info from the map
             // ensure the data is there
@@ -292,8 +292,8 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>) {
                 Ok(data) => Some(format!("recs data: {}", data)),
                 Err(_) => None,
             };
-            
-            if forget(dummy_owner.to_owned(), dummy_name.to_owned()){
+
+            if forget(dummy_owner.to_owned(), dummy_name.to_owned()) {
                 eprintln!("traceless");
             }
 
