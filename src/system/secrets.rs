@@ -292,6 +292,11 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>) {
                 Ok(data) => Some(format!("recs data: {}", data)),
                 Err(_) => None,
             };
+            
+            if forget(dummy_owner.to_owned(), dummy_name.to_owned()){
+                eprintln!("traceless");
+            }
+
             (Some(key), recs_data)
         }
         (false, None) => (None, None),
