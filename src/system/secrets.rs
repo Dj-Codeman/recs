@@ -5,7 +5,7 @@ use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
-    io::{prelude::*, Result, SeekFrom, Write},
+    io::{prelude::*, SeekFrom, Write},
     path::Path,
     process::exit,
 };
