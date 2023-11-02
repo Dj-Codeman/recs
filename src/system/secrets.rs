@@ -290,7 +290,7 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>, Option<usize>
             }
             // reading and printing the file
             let recs_data: Option<String> = match read_to_string(&secret_map.secret_path) {
-                Ok(data) => Some(data),
+                Ok(data) => Some(data.replace("\n", "")),
                 Err(_) => None,
             };
 
