@@ -40,7 +40,7 @@ pub fn write(
     filename: String,
     secret_owner: String,
     secret_name: String,
-) -> (bool, Option<String>) {
+) -> (bool, Option<String>, Option<usize>) {
     //TODO Dep or simplyfy
     let max_buffer_size = calc_buffer();
     let file_size = metadata(filename.clone())
@@ -184,7 +184,7 @@ pub fn write(
                     // reached end of file
                     break;
                 }
-                Err(_e) => return (false, None),
+                Err(_e) => return (false, None, None),
             }
 
             //? updating the pointers and the sig num
@@ -233,16 +233,16 @@ pub fn write(
         }
         // resolving the key data
         let key_data: String = fetch_chunk_helper(secret_data_struct.key);
-        return (true, Some(key_data));
+        return (true, Some(key_data), Some(chunk_count));
     } else {
         let msg: String = format!("Warning {} doesn't exist", &filename);
         append_log(PROG, &msg);
         eprintln!("{}", &msg);
-        return (false, None);
+        return (false, None, None);
     }
 }
 
-pub fn write_raw(data: String) -> (Option<String>, Option<String>) {
+pub fn write_raw(data: String) -> (Option<String>, Option<String>, Option<usize>) {
     let dummy_path: &str = "/tmp/dummy.recs";
     let dummy_owner: &str = "owner";
     let dummy_name: &str = "temp";
@@ -261,15 +261,14 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>) {
     };
 
     // encrypting the dummy file
-    let results: (bool, Option<String>) = write(
+    let results: (bool, Option<String>, Option<usize>) = write(
         dummy_path.to_owned(),
         dummy_owner.to_string(),
         dummy_name.to_string(),
     );
 
     match results {
-        (true, None) => (None, None),
-        (true, Some(data)) => {
+        (true, Some(data), Some(chunks)) => {
             // got the key now get the cipher data
             let key: String = data;
             // finding the dummy map
@@ -296,11 +295,14 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>) {
                 eprintln!("traceless");
             }
 
-            (Some(key), recs_data)
+            (Some(key), recs_data, Some(chunks))
         }
-        (false, None) => (None, None),
-        (false, Some(_)) => (None, None),
+        (_, _, _) => (None, None, None)
     }
+}
+
+pub fn _read_raw(_data: String, _key: String, _chunks: String) {
+    todo!()
 }
 
 pub fn read(secret_owner: String, secret_name: String) -> bool {

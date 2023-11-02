@@ -26,7 +26,7 @@ use std::{
 use crate::{
     array::{index_system_array, ChunkMap},
     array_tools::fetch_chunk,
-    config::{ARRAY_LEN, CHUNK_SIZE, DEBUG, SYSTEM_ARRAY_LOCATION},
+    config::{ARRAY_LEN, CHUNK_SIZE, SYSTEM_ARRAY_LOCATION},
     encrypt::create_hash,
     local_env::{set_system, MAPS, META, PROG, VERSION},
     secret::{forget, read, write},
@@ -38,9 +38,9 @@ fn check_debug() {
     env::set_var("RUST_BACKTRACE", "1");
 }
 
-pub fn initialize() {
+pub fn initialize(debug: bool) {
     start_log(PROG);
-    if DEBUG {
+    if debug {
         check_debug();
     }
 
@@ -67,13 +67,12 @@ fn ensure_max_map_exists() {
 // TODO identify if exit0 is appropriate and revisit
 pub fn insert(filename: String, owner: String, name: String) -> Option<bool> {
     match write(filename, owner, name) {
-        (true, None) => {
-            eprintln!("Encryption succeded but no key was provided");
+        (true, Some(_), Some(_)) => return Some(true),
+        (true, _, _) => {
+            eprintln!("Encryption succeded but proper meta data was not provided");
             exit(1)
         }
-        (true, Some(_)) => return Some(true),
-        (false, None) => exit(1),
-        (false, Some(_)) => exit(1),
+        (_, _, _) => exit(1),
     }
 }
 
@@ -96,52 +95,23 @@ pub fn ping(owner: String, name: String) -> bool {
     is_path(&secret_map_path)
 }
 
-pub fn encrypt_raw(data: String) -> (Option<String>, Option<String>) {
-    let results: (Option<String>, Option<String>) = match write_raw(data) {
-        (None, None) => {
+pub fn encrypt_raw(data: String) -> (Option<String>, Option<String>, Option<usize>) {
+    match write_raw(data) {
+        (Some(key), Some(data), Some(chunks)) => (Some(key), Some(data), Some(chunks)),
+        (None, None, None) => {
             eprintln!("No data provided");
-            (None, None)
+            (None, None, None)
         }
-        (None, Some(_)) => {
+        (_, _, _) => {
             eprintln!("Useless data provided");
-            (None, None)
+            (None, None, None)
         }
-        (Some(_), None) => {
-            eprintln!("Useless data provided");
-            (None, None)
-        }
-        (Some(key), Some(data)) => (Some(key), Some(data)),
-    };
-    results
+    }
 }
 
 pub fn decrypt_raw(_recs_data: String, _recs_key: String) -> bool {
     true
 }
-
-#[test]
-fn ping_check() {
-    let result = ping(PROG.to_string(), "dummy".to_string());
-    assert_eq!(result, false);
-}
-
-// Debugging and tooling
-
-pub fn check_map(map_num: u32) -> bool {
-    // needs to fail gracefuly
-    if fetch_chunk(map_num) == None {
-        false
-    } else {
-        true
-    }
-}
-
-#[test]
-fn null_map() {
-    let result = check_map(8000000);
-    assert_eq!(result, false);
-}
-// only passes on un initialized systems
 
 pub fn update_map(map_num: u32) -> bool {
     // ? Getting the current map data
@@ -204,11 +174,33 @@ pub fn update_map(map_num: u32) -> bool {
     return true;
 }
 
+#[test]
+fn ping_check() {
+    let result = ping(PROG.to_string(), "dummy".to_string());
+    assert_eq!(result, false);
+}
+
+// Debugging and tooling
+
+pub fn check_map(map_num: u32) -> bool {
+    // needs to fail gracefuly
+    if fetch_chunk(map_num) == None {
+        false
+    } else {
+        true
+    }
+}
+
+#[test]
+fn null_map() {
+    let result = check_map(8000000);
+    assert_eq!(result, false);
+}
+// only passes on un initialized systems
+
 pub fn _get_array_props() {
     // reading part of the array
     // get version
     // add a hash somewhere
     let _ = "";
 }
-
-// add import and export
