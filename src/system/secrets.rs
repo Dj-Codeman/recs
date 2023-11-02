@@ -44,7 +44,10 @@ pub fn write(
     //TODO Dep or simplyfy
     let max_buffer_size = calc_buffer();
     let file_size = metadata(filename.clone())
-        .expect(&format!("An error occoured while getting metadata from {}", &filename))
+        .expect(&format!(
+            "An error occoured while getting metadata from {}",
+            &filename
+        ))
         .len();
     let fit_buffer: usize = (file_size / 4).try_into().unwrap();
     let buffer_size: usize = if fit_buffer <= max_buffer_size {
@@ -297,12 +300,86 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>, Option<usize>
 
             (Some(key), recs_data, Some(chunks))
         }
-        (_, _, _) => (None, None, None)
+        (_, _, _) => (None, None, None),
     }
 }
 
-pub fn _read_raw(_data: String, _key: String, _chunks: String) {
-    todo!()
+pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u8>>) {
+    // Recreating the cipher chunk size
+    let secret_size: usize = data.len();
+    let secret_divisor: usize = chunks;
+    let new_buffer_size: usize = secret_size / secret_divisor;
+
+    // * Defing the initial parameters to start reading from string
+    // defining the initial pointer range and sig chunk
+
+    let mut range_start: usize = 0;
+    let mut range_end: usize = new_buffer_size as usize;
+    let mut signature_count: usize = 1;
+
+    let mut encoded_buffer: String = String::new(); // decrypted hex encoded data
+    let mut plain_buffer: Vec<u8> = vec![];
+    let mut signature: String = String::new(); // the decoded signature
+
+    // ! reading the chunks
+    loop {
+        // Setting the pointer and cursors before the read
+
+        // ! handeling the file reading and outputs
+        while range_start < data.len() {
+            let chunk = &data[range_start..range_end];
+
+            let secret_buffer = match std::str::from_utf8(chunk.as_bytes()) {
+                Ok(s) => s.to_owned(),
+                Err(_) => panic!("Invalid UTF-8 sequence"),
+            };
+
+            // take the first spliiting chunk into signature and cipher data
+            let encoded_signature: String = truncate(&secret_buffer, 62).to_string();
+            let cipher_buffer: String = secret_buffer[62..].to_string();
+
+            // * decrypting the chunk
+            encoded_buffer += &decrypt(cipher_buffer.clone(), key.clone());
+
+            // * handeling decoding the signature
+            let signature_data = String::from_utf8(
+                hex::decode(encoded_signature).expect("Signature could not be decoded"),
+            );
+
+            match signature_data {
+                Ok(string) => signature += &string,
+                Err(e) => println!("Invalid signature: {}", e),
+            }
+
+            // ! After 9 chuncks an HMAC error is thrown because the sig size is not updated
+            // !? Verify the signature integrity
+            match verify_signature(&encoded_buffer, signature.as_str(), signature_count) {
+                true => {
+                    // ? unencoding buffer
+                    let mut plain_result: Vec<u8> = match hex::decode(&encoded_buffer) {
+                        Ok(data) => data,
+                        Err(_) => {
+                            eprint!("Unable to decode the data");
+                            exit(233);
+                        }
+                    };
+
+                    plain_buffer.append(&mut plain_result);
+                    //? updating the pointers and the buffer
+                    range_start = range_end.clone();
+                    range_end += new_buffer_size as usize;
+                    signature_count += 1;
+                    encoded_buffer = "".to_string();
+                    signature = "".to_string();
+
+                    if range_end == secret_size + new_buffer_size {
+                        return (true, Some(plain_result));
+                    }
+                }
+                false => return (false, None),
+            }
+        }
+    }
 }
 
 pub fn read(secret_owner: String, secret_name: String) -> bool {
@@ -412,51 +489,33 @@ pub fn read(secret_owner: String, secret_name: String) -> bool {
             }
 
             // ! After 9 chuncks an HMAC error is thrown because the sig size is not updated
-            // !? Verify the signature integrity
-            let _sig_digit_count = truncate(&signature, 1); // remember it exists
+            // !? Verify the signature integrity // let _sig_digit_count = truncate(&signature, 1);
+            match verify_signature(&encoded_buffer, signature.as_str(), signature_count) {
+                true => {
+                    // ? unencoding buffer
+                    let plain_result: Vec<u8> = match hex::decode(&encoded_buffer) {
+                        Ok(data) => data,
+                        Err(_) => {
+                            eprint!("Unable to decode the data");
+                            exit(233);
+                        }
+                    };
 
-            let sig_version = truncate(&signature[2..], 6);
-            if sig_version != VERSION {
-                eprintln!("An error occoured while reading data, check logs");
-                append_log( PROG, "The signature data indicates an older version of recs or encore was used to write this.");
-                append_log( PROG, "I'll try to read this data but if a can't get an older version or recs or encore and try again");
+                    // ? appending on decode
+                    match plain_file.write_all(&plain_result) {
+                        Ok(_) => (),
+                        Err(_) => panic!("Error while writing to file"),
+                    }
+
+                    //? updating the pointers and the buffer
+                    range_start = range_end.clone();
+                    range_end += new_buffer_size as u64;
+                    signature_count += 1;
+                    encoded_buffer = "".to_string();
+                    signature = "".to_string();
+                }
+                false => return false,
             }
-
-            let sig_hash = truncate(&signature[9..], 20);
-            if truncate(&create_hash(&encoded_buffer), 20).to_string() != sig_hash {
-                eprintln!(
-                    "Something went really wrong, get some coffee or a drink and check the logs"
-                );
-                append_log(PROG, "A chunk had an invalid has signature");
-                append_log(
-                    PROG,
-                    "an option will be in a cli tool to ignore checks in an emergency",
-                );
-                exit(1);
-            }
-
-            let sig_count_data = &signature[30..];
-            let sig_count = sig_count_data.parse::<usize>().unwrap();
-            if sig_count != signature_count {
-                append_log( PROG, "Making note: while decrypting the signature counts are mis-aligned foul-play or bad code");
-            }
-
-            // ? unencoding buffer
-            let plain_result: Vec<u8> =
-                hex::decode(&encoded_buffer).expect("Can't decode the string"); // encoding needs to be diffrent
-
-            // ? appending on decode
-            match plain_file.write_all(&plain_result) {
-                Ok(_) => (),
-                Err(_) => panic!("Error while writing to file"),
-            }
-
-            //? updating the pointers and the buffer
-            range_start = range_end.clone();
-            range_end += new_buffer_size as u64;
-            signature_count += 1;
-            encoded_buffer = "".to_string();
-            signature = "".to_string();
         }
 
         return true;
@@ -512,4 +571,34 @@ fn fetch_chunk_helper(num: u32) -> String {
     };
 
     chunk_data.unwrap()
+}
+
+fn verify_signature(encoded_buffer: &str, signature: &str, signature_count: usize) -> bool {
+    let _sig_digit_count = truncate(&signature, 1); // remember it exists
+
+    let sig_version = truncate(&signature[2..], 6);
+    if sig_version != VERSION {
+        eprintln!("An error occoured while reading data, check logs");
+        append_log( PROG, "The signature data indicates an older version of recs or encore was used to write this.");
+        append_log( PROG, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
+    }
+
+    let sig_hash = truncate(&signature[9..], 20);
+    if truncate(&create_hash(&encoded_buffer.to_owned()), 20).to_string() != sig_hash {
+        eprintln!("Something went really wrong, get some coffee or a drink and check the logs");
+        append_log(PROG, "A chunk had an invalid has signature");
+        append_log(
+            PROG,
+            "an option will be in a cli tool to ignore checks in an emergency",
+        );
+        return false;
+    }
+
+    let sig_count_data = &signature[30..];
+    let sig_count = sig_count_data.parse::<usize>().unwrap();
+    if sig_count != signature_count {
+        append_log( PROG, "Making note: while decrypting the signature counts are mis-aligned foul-play or bad code");
+    }
+
+    return true;
 }

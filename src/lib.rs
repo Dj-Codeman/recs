@@ -14,7 +14,7 @@ mod local_env;
 mod secret;
 
 use logging::{append_log, start_log};
-use secret::write_raw;
+use secret::{write_raw, read_raw};
 use system::{del_file, is_path};
 
 use std::{
@@ -109,8 +109,11 @@ pub fn encrypt_raw(data: String) -> (Option<String>, Option<String>, Option<usiz
     }
 }
 
-pub fn decrypt_raw(_recs_data: String, _recs_key: String) -> bool {
-    true
+pub fn decrypt_raw(recs_data: String, recs_key: String, recs_chunks: usize) -> (Option<bool>, Option<Vec<u8>>) {
+    match read_raw(recs_data, recs_key, recs_chunks){
+        (true, Some(data)) => (Some(true), Some(data)),
+        (_, _) => (Some(false), None)
+    }
 }
 
 pub fn update_map(map_num: u32) -> bool {
