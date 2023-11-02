@@ -90,10 +90,6 @@ pub fn decrypt(cipherdata: String, key: String) -> String {
         let encoded_ciphertext = truncate(&cipherdata, cipherdata_len - 16);
         // undo the hexencoding result
         let decoded_ciphertext = hex::decode(encoded_ciphertext).unwrap();
-        // ! debugging 
-        for value in &decoded_ciphertext {
-            notice(&format!("{}", value))
-        }
         // turn the data to a VEC byte array and decrypt it
         let mut buf = decoded_ciphertext.to_vec();
         // decrypt the binary data

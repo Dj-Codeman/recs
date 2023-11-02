@@ -1,6 +1,6 @@
 use hex::encode;
 use logging::append_log;
-use pretty::halt;
+use pretty::{halt, notice};
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -328,6 +328,7 @@ pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u
         // ! handeling the file reading and outputs
         while range_start < data.len() {
             let chunk = &data[range_start..range_end];
+            notice(&chunk);
 
             let secret_buffer = match std::str::from_utf8(chunk.as_bytes()) {
                 Ok(s) => s.to_owned(),
