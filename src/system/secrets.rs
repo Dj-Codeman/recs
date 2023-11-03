@@ -235,7 +235,7 @@ pub fn write(
             std::fs::remove_file(secret_data_struct.file_path).unwrap();
         }
         // resolving the key data
-        let key_data: String = fetch_chunk_helper(secret_data_struct.key);
+        let key_data: String = create_writing_key(fetch_chunk_helper(num).to_string());
         return (true, Some(key_data), Some(chunk_count));
     } else {
         let msg: String = format!("Warning {} doesn't exist", &filename);
