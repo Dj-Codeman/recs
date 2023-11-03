@@ -98,6 +98,7 @@ pub fn decrypt(cipherdata: String, key: String) -> String {
             .decrypt(&mut buf)
             .unwrap();
         // turn it back into text
+        notice(str::from_utf8(decrypted_ciphertext).unwrap());
         return str::from_utf8(decrypted_ciphertext).unwrap().to_string();
     } else {
         // Breaking because the hmac isn't valid // ! add the right exit
