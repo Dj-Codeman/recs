@@ -2,7 +2,7 @@ use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex;
 use hmac::{Hmac, Mac};
-use pretty::{halt, notice};
+use pretty::halt;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::{Digest, Sha256};
 use std::{process::exit, str};
@@ -98,7 +98,6 @@ pub fn decrypt(cipherdata: String, key: String) -> String {
             .decrypt(&mut buf)
             .unwrap();
         // turn it back into text
-        notice(str::from_utf8(decrypted_ciphertext).unwrap());
         return str::from_utf8(decrypted_ciphertext).unwrap().to_string();
     } else {
         // Breaking because the hmac isn't valid // ! add the right exit

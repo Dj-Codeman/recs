@@ -365,16 +365,20 @@ pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u
                         }
                     };
 
-                    plain_buffer.append(&mut plain_result);
                     //? updating the pointers and the buffer
+                    plain_buffer.append(&mut plain_result);
+                    // ? ranges 
                     range_start = range_end.clone();
                     range_end += new_buffer_size as usize;
                     signature_count += 1;
+                    // ? buffers
+                    // #[allow(unused_assignments)]
+                    // plain_result = vec![];
                     encoded_buffer = "".to_string();
                     signature = "".to_string();
 
                     if range_start >= secret_size {
-                        return (true, Some(plain_result));
+                        return (true, Some(plain_buffer));
                     }
                 }
                 false => return (false, None),
