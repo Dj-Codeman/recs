@@ -306,7 +306,7 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>, Option<usize>
 
 pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u8>>) {
     // Recreating the cipher chunk size
-    let secret_size: usize = data.len();
+    let secret_size: usize = data.chars().count();
     let secret_divisor: usize = chunks;
     let new_buffer_size: usize = secret_size / secret_divisor;
 
