@@ -373,7 +373,7 @@ pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u
                     encoded_buffer = "".to_string();
                     signature = "".to_string();
 
-                    if range_end == secret_size + new_buffer_size {
+                    if range_start >= secret_size {
                         return (true, Some(plain_result));
                     }
                 }
