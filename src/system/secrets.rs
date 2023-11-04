@@ -1,6 +1,6 @@
 use hex::encode;
 use logging::append_log;
-use pretty::{halt, notice};
+use pretty::halt;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -294,9 +294,7 @@ pub fn write_raw(data: String) -> (Option<String>, Option<String>, Option<usize>
                 Err(_) => None,
             };
 
-            if forget(dummy_owner.to_owned(), dummy_name.to_owned()) {
-                eprintln!("traceless");
-            }
+            forget(dummy_owner.to_owned(), dummy_name.to_owned());
 
             (Some(key), recs_data, Some(chunks))
         }
@@ -328,8 +326,6 @@ pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u
         // ! handeling the file reading and outputs
         while range_start < data.len() {
             let chunk = &data[range_start..range_end];
-            notice(&chunk);
-
             let secret_buffer = match std::str::from_utf8(chunk.as_bytes()) {
                 Ok(s) => s.to_owned(),
                 Err(_) => panic!("Invalid UTF-8 sequence"),
