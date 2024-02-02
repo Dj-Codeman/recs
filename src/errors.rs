@@ -96,6 +96,11 @@ pub enum RecsErrorType {
     InvalidIvData,
     InvalidBlockData,
     InvalidAuthRequest,
+    InvalidMapRequested,
+    InvalidMapVersion,
+    InvalidMapData,
+    InvalidMapHash,
+    InvalidBufferFit,
 }
 
 // pretty display
@@ -125,7 +130,7 @@ impl RecsError {
 
     fn kind_description(&self) -> String {
         match &self.kind {
-            RecsErrorType::Error => String::from("Program name defined is invalid"),
+            RecsErrorType::Error => String::from("An error occoured please check logs"),
             RecsErrorType::InitializationError => String::from("An error occoured initalizing recs check logs for more info"),
             RecsErrorType::SecretArrayError => String::from("An error occoured while working with the Key array"),
             RecsErrorType::JsonCreationError => String::from("An error occoured while creating json data"),
@@ -138,6 +143,12 @@ impl RecsError {
             RecsErrorType::InvalidIvData => String::from("Invalid Initial Vector data was provided somewhere while encryping / decrypting"),
             RecsErrorType::InvalidBlockData => String::from("A block mode error has been encountered"),
             RecsErrorType::InvalidAuthRequest => String::from("A userkey request was started with an invalid key"),
+            RecsErrorType::InvalidMapRequested => String::from("The map file requested doesn't exist"),
+            RecsErrorType::InvalidMapVersion => String::from("The system maps are out of date. Check logs"),
+            RecsErrorType::InvalidMapData => String::from("An error occoured while trying to read map data"),
+            RecsErrorType::InvalidMapHash => String::from("An error occoured please check logs"),
+            RecsErrorType::InvalidBufferFit => String::from("An error occoured while trying to define the writting buffer"),
+
 
 
         }

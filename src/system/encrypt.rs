@@ -149,30 +149,12 @@ fn create_hmac(cipherdata: &str) -> Result<String, RecsRecivedErrors> {
 
     // when the hmac is verified we check aginst the systemkey
     // * in the case of the chunk being illegible we do some screening
-    let chunk_data: Option<String> = match fetch_chunk(1) {
-        Some(data) => Some(data),
-        None => None,
+    let chunk_data: String = match fetch_chunk(1) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
     };
 
-    match chunk_data == None {
-        true => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidChunkData,
-            )))
-        }
-        false => (),
-    };
-
-    let mac_key = match chunk_data {
-        Some(d) => d.as_bytes(),
-        None => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidHMACData,
-            )))
-        }
-    };
-
-    let mut mac = match HmacSha256::new_from_slice(mac_key) {
+    let mut mac = match HmacSha256::new_from_slice(chunk_data.as_bytes()) {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
@@ -181,9 +163,6 @@ fn create_hmac(cipherdata: &str) -> Result<String, RecsRecivedErrors> {
             )))
         }
     };
-
-    let mut mac =
-        HmacSha256::new_from_slice(chunk_data.unwrap().as_bytes()).expect("An error occoured");
 
     mac.update(cipherdata.as_bytes());
     let hmac = truncate(&hex::encode(mac.finalize().into_bytes()), 64).to_string();

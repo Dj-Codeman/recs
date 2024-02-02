@@ -1,12 +1,15 @@
 // use nix::unistd::geteuid;
 use lazy_static::lazy_static;
 use logging::append_log;
-use serde::de;
 use sysinfo::{System, SystemExt};
-use system::{create_hash, del_dir, is_path, make_dir, remake_dir}; // for finding free ram for vectors
+use system::{create_hash, make_dir, remake_dir}; // for finding free ram for vectors
 
 use crate::{
-    array::{generate_system_array, index_system_array}, auth::generate_user_key, config::STREAMING_BUFFER_SIZE, errors::{RecsError, RecsRecivedErrors}, PROGNAME
+    array::{generate_system_array, index_system_array},
+    auth::generate_user_key,
+    config::STREAMING_BUFFER_SIZE,
+    errors::RecsRecivedErrors,
+    PROGNAME,
 };
 
 // Static stuff
@@ -38,7 +41,10 @@ pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
         Ok(_) => {
             match index_system_array() {
                 Ok(_) => match debug {
-                    true => append_log(unsafe { &PROGNAME }, "System array has been created and indexed"),
+                    true => append_log(
+                        unsafe { &PROGNAME },
+                        "System array has been created and indexed",
+                    ),
                     false => Ok(()),
                 },
                 Err(e) => return Err(e),
@@ -70,7 +76,9 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
             for path in paths.iter() {
                 match remake_dir(path) {
                     Ok(_) => match debug {
-                        true => append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path)),
+                        true => {
+                            append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path))
+                        }
                         false => Ok(()),
                     },
                     Err(e) => return Err(RecsRecivedErrors::SystemError(e)),

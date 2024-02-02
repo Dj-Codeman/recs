@@ -15,10 +15,10 @@ mod local_env;
 mod secret;
 
 use errors::RecsRecivedErrors;
-use logging::{append_log, errors::MyErrors, start_log};
-use pretty::output;
+use local_env::SYSTEM_ARRAY_LOCATION;
+use logging::{append_log, start_log};
 use secret::{read_raw, write_raw};
-use system::{del_file, is_path};
+use system::{create_hash, del_file, is_path};
 
 use std::{
     fs::{File, OpenOptions},
@@ -29,8 +29,7 @@ use std::{
 use crate::{
     array::{index_system_array, ChunkMap},
     array_tools::fetch_chunk,
-    config::{ARRAY_LEN, CHUNK_SIZE, SYSTEM_ARRAY_LOCATION},
-    encrypt::create_hash,
+    config::{ARRAY_LEN, CHUNK_SIZE},
     local_env::{set_system, MAPS, META, VERSION},
     secret::{forget, read, write},
 };
@@ -41,7 +40,8 @@ pub static mut DEBUGGING: Option<bool> = None;
 /// The PROG variable must be defined for logging, When this lib is used by diffrent programs, this will be the diffrenciator for the log files
 pub static mut PROGNAME: String = String::from("undefined");
 
-fn set_debug(option: bool) {
+// Mandatory for the lib
+pub fn set_debug(option: bool) {
     // Enables longer backtraces and enables more verbose logging
     match option {
         true => unsafe { DEBUGGING = Some(true) },
@@ -49,7 +49,7 @@ fn set_debug(option: bool) {
     }
 }
 
-pub fn initialize(prog: String) {
+pub fn initialize(prog: String) -> Result<(), RecsRecivedErrors> {
     let debugging: bool = match unsafe { DEBUGGING } {
         Some(d) => match d {
             true => true,
@@ -64,42 +64,56 @@ pub fn initialize(prog: String) {
             env::set_var("RUST_BACKTRACE", "1");
             true
         }
-        false => {
-            false
-        },
+        false => false,
     };
 
-    match start_log(unsafe { &PROG }) {
+    match start_log(unsafe { &PROGNAME }) {
         Ok(_) => (),
-        Err(e) => RecsRecivedErrors::display(RecsRecivedErrors::repack(e), false),
-    }
+        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+    };
 
-    ensure_system_path(unsafe { &PROG }, debug);
-    ensure_max_map_exists();
+    match ensure_system_path(unsafe { &PROGNAME }, debug) {
+        Ok(_) => (),
+        Err(e) => return Err(e),
+    };
+
+    match ensure_max_map_exists() {
+        Ok(_) => (),
+        Err(e) => return Err(e),
+    };
+
+    Ok(())
 }
 
-fn ensure_system_path(prog: &str, debug: bool) {
-    match is_path(SYSTEM_ARRAY_LOCATION) {
-        true => todo!(),
+fn ensure_system_path(prog: &str, debug: bool) -> Result<(), RecsRecivedErrors> {
+    match is_path(&SYSTEM_ARRAY_LOCATION) {
+        true => (), // Nothing needs to be done the lib with this name has  already been initialized
         false => {
-            append_log(prog, "System array file does not exist, re initializing recs");
-            set_system(debug);
-        },
-    }
-    
-    if !is_path(SYSTEM_ARRAY_LOCATION) {
+            append_log(
+                prog,
+                "System array file does not exist, re initializing recs",
+            );
 
-        set_system();
-    }
+            match set_system(debug) {
+                Ok(_) => (),
+                Err(e) => return Err(e),
+            };
+        }
+    };
+    Ok(())
 }
 
-fn ensure_max_map_exists() {
+fn ensure_max_map_exists() -> Result<(), RecsRecivedErrors> {
     let max_map = ARRAY_LEN / CHUNK_SIZE;
     let max_map_path = format!("{}/{}.map", *MAPS, max_map);
 
-    if !is_path(&max_map_path) {
-        index_system_array();
-    }
+    match is_path(&max_map_path) {
+        true => return Ok(()),
+        false => match index_system_array() {
+            Ok(_) => return Ok(()),
+            Err(e) => return Err(e),
+        },
+    };
 }
 
 // Normal actions
@@ -176,8 +190,8 @@ pub fn update_map(map_num: u32) -> bool {
 
     // ? calculating new hash
     let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num) {
-        Some(data) => (true, Some(data)),
-        None => (false, None),
+        Ok(data) => (true, Some(data)),
+        Err(_) => (false, None),
     };
 
     let new_hash: Option<String> = match chunk_data {
@@ -214,7 +228,7 @@ pub fn update_map(map_num: u32) -> bool {
 
     if let Err(_e) = writeln!(map_file, "{}", updated_map) {
         eprintln!("An error occoured");
-        append_log(PROG, "Could save map data to file");
+        append_log(unsafe { &PROGNAME }, "Could save map data to file");
     };
 
     return true;
@@ -222,7 +236,7 @@ pub fn update_map(map_num: u32) -> bool {
 
 #[test]
 fn ping_check() {
-    let result = ping(PROG.to_string(), "dummy".to_string());
+    let result = ping(unsafe { PROGNAME }, "dummy".to_string());
     assert_eq!(result, false);
 }
 
@@ -230,10 +244,9 @@ fn ping_check() {
 
 pub fn check_map(map_num: u32) -> bool {
     // needs to fail gracefuly
-    if fetch_chunk(map_num) == None {
-        false
-    } else {
-        true
+    match fetch_chunk(map_num) {
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
 

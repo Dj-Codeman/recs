@@ -1,6 +1,5 @@
 use hex;
 use logging::append_log;
-use pretty::halt;
 // use rand::distributions::{Distribution, Uniform};
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
@@ -44,8 +43,14 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     // The stored value. If it is the the same value are originally encrypted
     // We can attempt to decrypt the data given
 
-    let salt: String = fetch_chunk_helper(1);
-    let secret: String = fetch_chunk_helper(array_arimitics() - 1);
+    let salt: String = match fetch_chunk_helper(1) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
+    let secret: String = match fetch_chunk_helper(array_arimitics() - 1) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
         Err(e) => {
@@ -208,8 +213,14 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
         "user key authentication request started",
     );
 
-    let salt: String = fetch_chunk_helper(1);
-    let secret: String = fetch_chunk_helper(array_arimitics() - 1);
+    let salt: String = match fetch_chunk_helper(1) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
+    let secret: String = match fetch_chunk_helper(array_arimitics() - 1) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
         Err(e) => {
@@ -280,7 +291,10 @@ pub fn create_writing_key(key: String) -> Result<String, RecsRecivedErrors> {
 
     let prekey = create_hash(&prekey_str);
 
-    let salt: String = fetch_chunk_helper(1);
+    let salt: String = match fetch_chunk_helper(1) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
         Err(e) => {
@@ -311,16 +325,11 @@ pub fn create_writing_key(key: String) -> Result<String, RecsRecivedErrors> {
 }
 
 // * helper funtion for fetching chunks
-fn fetch_chunk_helper(num: u32) -> String {
-    let chunk_data: Option<String> = match fetch_chunk(num) {
-        Some(data) => Some(data),
-        None => None,
+fn fetch_chunk_helper(num: u32) -> Result<String, RecsRecivedErrors> {
+    let chunk_data: String = match fetch_chunk(num) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
     };
 
-    if chunk_data == None {
-        append_log(unsafe { &PROGNAME }, &format!("Error could not fetch the key: {}", num));
-        halt(&format!("Failed to fetch chunk data for number 1"));
-    };
-
-    chunk_data.unwrap()
+    Ok(chunk_data)
 }
