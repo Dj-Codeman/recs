@@ -9,6 +9,10 @@ pub enum RecsRecivedErrors {
     RecsError(RecsError),
 }
 
+pub enum RecsRecivedWarnings {
+    RecsWarning(RecsWarning),
+}
+
 impl RecsRecivedErrors {
     // This function will take other error classes created by others libs and format them in a easy way
     // to be displayed and handeled by recs
@@ -82,6 +86,12 @@ pub struct RecsError {
 }
 
 #[derive(Debug)]
+pub struct RecsWarning {
+    pub kind: RecsWarningType,
+    pub details: Option<String>,
+}
+
+#[derive(Debug)]
 pub enum RecsErrorType {
     Error,
     InitializationError,
@@ -101,14 +111,30 @@ pub enum RecsErrorType {
     InvalidMapData,
     InvalidMapHash,
     InvalidBufferFit,
+    InvalidUtf8Data,
+    InvalidSignature,
+}
+
+#[derive(Debug)]
+pub enum RecsWarningType {
+    OutdatedVersion,
 }
 
 // pretty display
 impl fmt::Display for RecsError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.details {
-            Some(d) => write!(f, "Logger Error: {} - {}", self.kind_description(), d),
-            None => write!(f, "Logger Error: {}", self.kind_description()),
+            Some(d) => write!(f, "Recs Error: {} - {}", self.kind_description(), d),
+            None => write!(f, "Recs Error: {}", self.kind_description()),
+        }
+    }
+}
+
+impl fmt::Display for RecsWarning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.details {
+            Some(d) => write!(f, "Recs Warning: {} - {}", self.kind_description(), d),
+            None => write!(f, "Recs Warning: {}", self.kind_description()),
         }
     }
 }
@@ -139,7 +165,7 @@ impl RecsError {
             RecsErrorType::InvalidChunkData => String::from("The encrypted data given is malformed, or I just can't read it"),
             RecsErrorType::InvalidHMACData => String::from("THE INTEGRITY OF THE REQUESTED FILE CAN'T BE VERIFIED. AN INVALID MAC WAS PROVIDED"),
             RecsErrorType::InvalidHMACSize => String::from("FAIL SAFE, somehow I generated an hmac that was longer that 64 bytes. I'm sick"),
-            RecsErrorType::InvalidHexData => String::from("Invalid hex data was provided somewhere while encryping / decrypting"),
+            // RecsErrorType::InvalidHexData => String::from("Invalid hex data was provided somewhere while encryping / decrypting"),
             RecsErrorType::InvalidIvData => String::from("Invalid Initial Vector data was provided somewhere while encryping / decrypting"),
             RecsErrorType::InvalidBlockData => String::from("A block mode error has been encountered"),
             RecsErrorType::InvalidAuthRequest => String::from("A userkey request was started with an invalid key"),
@@ -148,8 +174,32 @@ impl RecsError {
             RecsErrorType::InvalidMapData => String::from("An error occoured while trying to read map data"),
             RecsErrorType::InvalidMapHash => String::from("An error occoured please check logs"),
             RecsErrorType::InvalidBufferFit => String::from("An error occoured while trying to define the writting buffer"),
+            RecsErrorType::InvalidUtf8Data => String::from("An error occoured while de-crypting, data that was expected to be utf8 formatted was not."),
+            RecsErrorType::InvalidHexData => String::from("An error occoured while de-crypting, data that was expected to be hex formatted that was not"),
+            RecsErrorType::InvalidSignature => String::from("The data given has not passed the integrity test"),
 
+        }
+    }
+}
 
+impl RecsWarning {
+    pub fn new(kind: RecsWarningType) -> Self {
+        RecsWarning {
+            kind, 
+            details: None,
+        }
+    }
+
+    pub fn new_details(kind: RecsWarningType, details: &str) -> Self {
+        RecsWarning {
+            kind,
+            details: Some(details.to_string())
+        }
+    }
+
+    fn kind_description(&self) -> String {
+        match &self.kind {
+            RecsWarningType::OutdatedVersion => String::from("The signature data indicates an older version of recs or encore was used to write this."),
 
         }
     }

@@ -261,7 +261,7 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
     };
 
     let verification_result: String =
-        match decrypt(&verification_ciphertext.to_string(), userkey.clone()) {
+        match decrypt(&verification_ciphertext.to_string(), &userkey) {
             Ok(d) => String::from_utf8_lossy(&d).to_string(),
             Err(e) => return Err(e),
         };

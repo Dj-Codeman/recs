@@ -78,7 +78,7 @@ pub fn encrypt(
     return Ok(cipherdata);
 }
 
-pub fn decrypt(cipherdata: &str, key: String) -> Result<Vec<u8>, RecsRecivedErrors> {
+pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors> {
     // * Changing this to run on refrenced data to hopefully run with a smaller ram footprint
     //cipherdata legnth minus the hmac because its appened later
     let cipherdata_len: usize = cipherdata.len() - 64;

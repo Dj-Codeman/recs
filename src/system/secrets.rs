@@ -22,9 +22,12 @@ use crate::{
     auth::create_writing_key,
     config::{LEAVE_IN_PEACE, SOFT_MOVE_FILES},
     encrypt::{decrypt, encrypt},
-    errors::{RecsError, RecsErrorType, RecsRecivedErrors},
+    errors::{
+        RecsError, RecsErrorType, RecsRecivedErrors, RecsRecivedWarnings, RecsWarning,
+        RecsWarningType,
+    },
     local_env::{calc_buffer, DATA, META, VERSION},
-    PROGNAME,
+    DEBUGGING, PROGNAME,
 };
 
 // ! This is the struct for all secrets CHANGE WITH CARE
@@ -214,7 +217,7 @@ pub fn write(
                     // create chunk signature
                     let sig_data = format!(
                         "{}-{}-{}-{}",
-                        signature_count.to_string().len(),
+                        padding_count(signature_count), // Fix for single digit signature count
                         VERSION,
                         truncate(&create_hash(&encoded_buffer), 20),
                         signature_count
@@ -363,14 +366,15 @@ pub fn write(
     }
 }
 
-pub fn write_raw(data: String) -> Result<(String, usize), RecsRecivedErrors> {
+pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedErrors> {
+    // Key_Data Cipher_Data Chunk_Count
     let dummy_path: &str = "/tmp/dummy.recs";
     let dummy_owner: &str = "owner";
     let dummy_name: &str = "temp";
     // write the data to the file
 
     // ! making the secret path to append data too
-    let dummy_file: File = match File::create(dummy_path) {
+    let mut dummy_file: File = match File::create(dummy_path) {
         Ok(f) => f,
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -381,7 +385,7 @@ pub fn write_raw(data: String) -> Result<(String, usize), RecsRecivedErrors> {
     };
 
     // writing when made
-    dummy_file.write_all(format!("{}", data).as_bytes());
+    dummy_file.write_all(&data);
 
     // encrypting the dummy file
     let results: Result<(String, usize), RecsRecivedErrors> = write(
@@ -407,7 +411,7 @@ pub fn write_raw(data: String) -> Result<(String, usize), RecsRecivedErrors> {
                     )))
                 }
             };
-            let secret_map_data = match decrypt(&cipher_map_data, fetch_chunk_helper(1)) {
+            let secret_map_data = match decrypt(&cipher_map_data, &fetch_chunk_helper(1)) {
                 Ok(d) => d,
                 Err(e) => return Err(e),
             };
@@ -437,20 +441,25 @@ pub fn write_raw(data: String) -> Result<(String, usize), RecsRecivedErrors> {
             }
 
             // reading and printing the file
-            let recs_data: Option<String> = match read_to_string(&secret_map.secret_path) {
-                Ok(data) => Some(data.replace("\n", "")),
-                Err(_) => None,
+            let recs_data: String = match read_to_string(&secret_map.secret_path) {
+                Ok(data) => data.replace("\n", ""),
+                Err(e) => {
+                    return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                        SystemErrorType::ErrorReadingFile,
+                        &e.to_string(),
+                    )))
+                }
             };
 
             forget(dummy_owner.to_owned(), dummy_name.to_owned());
 
-            (Some(key), recs_data, Some(chunks))
+            return Ok((key, recs_data, count));
         }
         Err(e) => return Err(e),
     }
 }
 
-pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u8>>) {
+pub fn read_raw(data: String, key: String, chunks: usize) -> Result<Vec<u8>, RecsRecivedErrors> {
     // Recreating the cipher chunk size
     let secret_size: usize = data.chars().count();
     let secret_divisor: usize = chunks;
@@ -463,8 +472,8 @@ pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u
     let mut range_end: usize = new_buffer_size as usize;
     let mut signature_count: usize = 1;
 
-    let mut encoded_buffer: String = String::new(); // decrypted hex encoded data
-    let mut plain_buffer: Vec<u8> = vec![];
+    let mut encoded_buffer: Vec<u8> = vec![]; // decrypted hex encoded data
+    let mut plain_buffer: Vec<u8> = vec![]; // Because now we encrypt and decryt to bytes we dont give af about utf8 data
     let mut signature: String = String::new(); // the decoded signature
 
     // ! reading the chunks
@@ -473,28 +482,54 @@ pub fn read_raw(data: String, key: String, chunks: usize) -> (bool, Option<Vec<u
 
         // ! handeling the file reading and outputs
         while range_start < data.len() {
-            let chunk = &data[range_start..range_end];
-            let secret_buffer = match std::str::from_utf8(chunk.as_bytes()) {
+            let chunk: &str = &data[range_start..range_end];
+            let secret_buffer: String = match std::str::from_utf8(chunk.as_bytes()) {
+                // This function is reading the hex data from the file, It SHOULD be a string
                 Ok(s) => s.to_owned(),
-                Err(_) => panic!("Invalid UTF-8 sequence"),
+                Err(e) => {
+                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                        RecsErrorType::InvalidUtf8Data,
+                        &e.to_string(),
+                    )))
+                }
             };
 
             // take the first spliiting chunk into signature and cipher data
-            let encoded_signature: String = truncate(&secret_buffer, 62).to_string();
-            let cipher_buffer: String = secret_buffer[62..].to_string();
+            let encoded_signature: &str = truncate(&secret_buffer, 63);
+            // ! When this inevidably fails, Remember the paddingcount() changes the sig legnth.
+            let cipher_buffer: &str = &secret_buffer[62..]; // * this is the encrypted hex encoded bytes
 
             // * decrypting the chunk
-            encoded_buffer += &decrypt(cipher_buffer.clone(), key.clone());
+            encoded_buffer.append(match decrypt(&cipher_buffer, &key) {
+                Ok(d) => &mut d,
+                Err(e) => return Err(e),
+            });
 
             // * handeling decoding the signature
-            let signature_data = String::from_utf8(
-                hex::decode(encoded_signature).expect("Signature could not be decoded"),
-            );
-
-            match signature_data {
-                Ok(string) => signature += &string,
-                Err(e) => println!("Invalid signature: {}", e),
-            }
+            // ? This mess decodes the vec array into a hex encoded string, then reads that into a normal &string
+            signature += match String::from_utf8(match hex::decode(encoded_signature) {
+                Ok(d) => d,
+                Err(e) => {
+                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                        RecsErrorType::InvalidHexData,
+                        &format!(
+                            "An error occoured while reading signature {}",
+                            &e.to_string()
+                        ),
+                    )))
+                }
+            }) {
+                Ok(d) => &d,
+                Err(e) => {
+                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                        RecsErrorType::InvalidUtf8Data,
+                        &format!(
+                            "An error occoured while reading signature {}",
+                            &e.to_string()
+                        ),
+                    )))
+                }
+            };
 
             // ! After 9 chuncks an HMAC error is thrown because the sig size is not updated
             // !? Verify the signature integrity
@@ -725,17 +760,37 @@ fn fetch_chunk_helper(num: u32) -> String {
     chunk_data.unwrap()
 }
 
-fn verify_signature(encoded_buffer: &str, signature: &str, signature_count: usize) -> bool {
+fn verify_signature(
+    encoded_buffer: &str,
+    signature: &str,
+    signature_count: usize,
+) -> Result<(bool, Option<RecsRecivedWarnings>), RecsRecivedErrors> {
     let _sig_digit_count = truncate(&signature, 1); // remember it exists
 
     let sig_version = truncate(&signature[2..], 6);
-    if sig_version != VERSION {
-        eprintln!("An error occoured while reading data, check logs");
-        append_log( unsafe { &PROGNAME }, "The signature data indicates an older version of recs or encore was used to write this.");
-        append_log( unsafe { &PROGNAME }, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
-    }
 
-    let sig_hash = truncate(&signature[9..], 20);
+    // Defining one variable that will hold the last warning if any
+    let mut warnings: Option<RecsRecivedWarnings> = None;
+
+    warnings = match sig_version == VERSION {
+        true => match unsafe { DEBUGGING } {
+            Some(d) => match d {
+                true => {
+                    append_log(unsafe { &PROGNAME }, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
+                    None
+                }
+                false => None,
+            },
+            None => None,
+        },
+        false => Some(RecsRecivedWarnings::RecsWarning(RecsWarning::new(
+            RecsWarningType::OutdatedVersion,
+        ))),
+    };
+
+    // pulling the hash from the signature
+    let sig_hash: &str = truncate(&signature[9..], 20);
+
     if truncate(&create_hash(&encoded_buffer.to_owned()), 20).to_string() != sig_hash {
         eprintln!("Something went really wrong, get some coffee or a drink and check the logs");
         append_log(unsafe { &PROGNAME }, "A chunk had an invalid has signature");
@@ -753,4 +808,17 @@ fn verify_signature(encoded_buffer: &str, signature: &str, signature_count: usiz
     }
 
     return true;
+}
+
+fn padding_count(number: usize) -> String {
+    // TODO Add support for a chunck count of usize
+    if number < 10 {
+        let mut number_string = String::new();
+        number_string.push_str("0");
+        number_string.push_str(&number.to_string());
+        return number_string;
+    } else {
+        let number_string: String = String::from(&number.to_string());
+        return number_string;
+    }
 }
