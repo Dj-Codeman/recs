@@ -113,11 +113,13 @@ pub enum RecsErrorType {
     InvalidBufferFit,
     InvalidUtf8Data,
     InvalidSignature,
+    InvalidFile,
 }
 
 #[derive(Debug)]
 pub enum RecsWarningType {
     OutdatedVersion,
+    MisAlignedChunk,
 }
 
 // pretty display
@@ -177,6 +179,8 @@ impl RecsError {
             RecsErrorType::InvalidUtf8Data => String::from("An error occoured while de-crypting, data that was expected to be utf8 formatted was not."),
             RecsErrorType::InvalidHexData => String::from("An error occoured while de-crypting, data that was expected to be hex formatted that was not"),
             RecsErrorType::InvalidSignature => String::from("The data given has not passed the integrity test"),
+            RecsErrorType::InvalidFile => String::from("The file path specified by the secret map doesn'y exist"),
+            
 
         }
     }
@@ -200,6 +204,7 @@ impl RecsWarning {
     fn kind_description(&self) -> String {
         match &self.kind {
             RecsWarningType::OutdatedVersion => String::from("The signature data indicates an older version of recs or encore was used to write this."),
+            RecsWarningType::MisAlignedChunk => String::from("While decrypting the signature counts are mis-aligned, Check hash of returned data to ensure integrity"),
 
         }
     }
