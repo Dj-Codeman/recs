@@ -1,18 +1,18 @@
+use logging::append_log;
+use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
     io::{prelude::*, SeekFrom, Write},
     str,
 };
-use logging::append_log;
-use serde::{Serialize, Deserialize};
-use system::{del_dir, is_path, del_file};
+use system::{del_dir, del_file, errors::SystemError, is_path, create_hash};
 
 use crate::{
-    config::{
-        ARRAY_LEN, CHUNK_SIZE, SYSTEM_ARRAY_LOCATION,
-    },
-    local_env::MAPS,
-    encrypt::{create_hash, create_secure_chunk}, local_env::{PROG, VERSION},
+    config::{ARRAY_LEN, CHUNK_SIZE},
+    encrypt::create_secure_chunk,
+    errors::{RecsError, RecsErrorType, RecsRecivedErrors},
+    local_env::{MAPS, SYSTEM_ARRAY_LOCATION, VERSION},
+    PROGNAME,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -37,35 +37,49 @@ pub fn array_arimitics() -> u32 {
     return total_chunks;
 }
 
-pub fn generate_system_array() -> bool {
-    append_log(PROG, "Creating system array");
+pub fn generate_system_array(debug: bool) -> Result<bool, RecsRecivedErrors> {
+    append_log(unsafe { &PROGNAME }, "Creating system array");
 
     // Remove the existing system array directory
-    del_dir(&SYSTEM_ARRAY_LOCATION);
+    match del_dir(&SYSTEM_ARRAY_LOCATION) {
+        Ok(_) => match debug {
+            true => append_log(
+                unsafe { &PROGNAME },
+                &format!("{:?} Deleted", &SYSTEM_ARRAY_LOCATION),
+            ),
+            false => Ok(()),
+        },
+        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+    };
 
     // Create the system array contents
     let system_array_contents = create_system_array_contents();
 
     // Write the system array contents to the file
-    if write_system_array_to_file(&system_array_contents) {
-        append_log(PROG, "Created system array");
-        true
-    } else {
-        eprintln!("An error occurred");
-        append_log(PROG, "Could not write the system_array to the path specified");
-        false
+    match write_system_array_to_file(&system_array_contents) {
+        true => {
+            append_log(unsafe { &PROGNAME }, "Created system array");
+            return Ok(true);
+        }
+        false => {
+            append_log(
+                unsafe { &PROGNAME },
+                "Could not write the system_array to the path specified",
+            );
+            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                RecsErrorType::InitializationError,
+                "Could not write the system_array to the path specified",
+            )));
+        }
     }
 }
 
 fn create_system_array_contents() -> String {
-    let system_array_header = format!(
-        "<--REcS System Array Version {}-->\n",
-        VERSION
-    );
+    let system_array_header = format!("<--REcS Array Version {}-->\n", VERSION);
 
     let system_array_chunk = create_secure_chunk();
 
-    let system_array_footer = "\n</--REcS System Array-->";
+    let system_array_footer = "\n</--REcS Array-->";
 
     format!(
         "{}{}{}",
@@ -78,7 +92,7 @@ fn write_system_array_to_file(contents: &str) -> bool {
         .create_new(true)
         .write(true)
         .append(true)
-        .open(SYSTEM_ARRAY_LOCATION)
+        .open(SYSTEM_ARRAY_LOCATION.to_string())
     {
         Ok(mut system_array_file) => {
             if let Err(_) = write!(system_array_file, "{}", contents) {
@@ -93,19 +107,28 @@ fn write_system_array_to_file(contents: &str) -> bool {
 
 // indexing the created array
 
-pub fn index_system_array() -> bool {
+pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
     let mut chunk_number: u32 = 1;
     let mut range_start: u32 = BEG_CHAR;
     let mut range_end: u32 = BEG_CHAR + CHUNK_SIZE as u32;
     #[allow(unused_assignments)] // * cheap fix
     let mut chunk: String = String::new();
 
-    let mut file = File::open(SYSTEM_ARRAY_LOCATION).expect("Failed to open file");
+    let mut file = match File::open(SYSTEM_ARRAY_LOCATION.to_string()) {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                system::errors::SystemErrorType::ErrorOpeningFile,
+                &e.to_string(),
+            )))
+        }
+    };
 
     if (range_end - range_start) < CHUNK_SIZE as u32 {
-        eprintln!("An error occurred");
-        append_log(PROG, "Invalid secret chunk length");
-        return false;
+        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+            RecsErrorType::SecretArrayError,
+            "Invalid secret chunk length",
+        )));
     }
 
     loop {
@@ -113,8 +136,15 @@ pub fn index_system_array() -> bool {
             break;
         }
 
-        file.seek(SeekFrom::Start(range_start as u64))
-            .expect("Failed to set seek head");
+        match file.seek(SeekFrom::Start(range_start as u64)) {
+            Ok(d) => d,
+            Err(e) => {
+                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                    system::errors::SystemErrorType::ErrorReadingFile,
+                    &format!("Failed to set seek head: {}", e.to_string()),
+                )))
+            }
+        };
 
         let mut buffer = vec![0; CHUNK_SIZE as usize];
         match file.read_exact(&mut buffer) {
@@ -131,31 +161,42 @@ pub fn index_system_array() -> bool {
                     chunk_end: range_end,
                 };
 
-                let chunk_map_path = format!(
-                    "{}/chunk_{}.map",
-                    *MAPS,
-                    chunk_number
-                );
+                let chunk_map_path = format!("{}/chunk_{}.map", *MAPS, chunk_number);
 
                 if is_path(&chunk_map_path) {
                     del_file(&chunk_map_path);
                 }
 
-                let pretty_chunk_map =
-                    serde_json::to_string_pretty(&chunk_map).expect("JSON serialization failed");
+                let pretty_chunk_map = match serde_json::to_string_pretty(&chunk_map) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                            RecsErrorType::JsonCreationError,
+                            &e.to_string(),
+                        )))
+                    }
+                };
 
-                let mut chunk_map_file = OpenOptions::new()
+                let mut chunk_map_file = match OpenOptions::new()
                     .create_new(true)
                     .write(true)
                     .append(true)
                     .open(&chunk_map_path)
-                    .expect("File could not be written to");
+                {
+                    Ok(d) => d,
+                    Err(e) => {
+                        return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                            system::errors::SystemErrorType::ErrorOpeningFile,
+                            &e.to_string(),
+                        )))
+                    }
+                };
 
-                if let Err(_) = write!(chunk_map_file, "{}", pretty_chunk_map) {
-                    eprintln!("An error occurred");
-                    append_log(PROG, "Could not write the system_array to the path specified");
-                    return false;
-                }
+                match write!(chunk_map_file, "{}", pretty_chunk_map) {
+                    Ok(_) => append_log(unsafe { &PROGNAME }, &format!("The map file {} has been created", &chunk_map_path)),
+                    Err(e) => return Err(RecsRecivedErrors::SystemError(SystemError::new_details(system::errors::SystemErrorType::ErrorOpeningFile, &e.to_string()))),
+                };
+
             }
             Err(_) => break,
         }
@@ -166,8 +207,8 @@ pub fn index_system_array() -> bool {
         range_end += CHUNK_SIZE as u32;
     }
 
-    append_log(PROG, "Indexed system array !");
-    true
+    append_log(unsafe { &PROGNAME }, "Indexed system array !");
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -175,7 +216,7 @@ mod tests {
     use super::*;
 
     // Mock functions or constants for testing
-    // const PROG: &str = "TEST_PROG";
+    // const PROGNAME: &str = "TEST_PROG";
     const VERSION: &str = "1.0.0"; // Adjust the version as needed
 
     #[test]

@@ -1,28 +1,30 @@
-use pretty::halt;
 use hex;
 use logging::append_log;
+use pretty::halt;
 // use rand::distributions::{Distribution, Uniform};
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
-use system::{del_dir, is_path, del_file};
 use std::{
     fs::{read_to_string, OpenOptions},
     io::Write,
-    process::exit,
     str,
 };
+use system::{create_hash, del_file, errors::SystemError, is_path};
 
 use crate::{
+    array::array_arimitics,
+    array_tools::fetch_chunk,
     config::USER_KEY_LOCATION,
+    encrypt::{decrypt, encrypt},
+    errors::{RecsError, RecsErrorType, RecsRecivedErrors},
     local_env::MAPS,
-    encrypt::{create_hash, decrypt, encrypt}, local_env::{PROG, VERSION}, array_tools::fetch_chunk, array::array_arimitics,
+    local_env::VERSION,
+    PROGNAME,
 };
 
 // pbkdf Generator specs
 static PBKDF2_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA256;
 static PBKDF2_WRITTING_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA512;
-
-
 
 // ! ALL KEYS FOLLOW THIS STRUCT
 #[derive(Serialize, Deserialize, Debug)]
@@ -34,15 +36,32 @@ pub struct KeyIndex {
     pub key: u32,
 }
 
-
 // ! KEY GENERATION SECTION
-pub fn generate_user_key() -> bool {
-    // ! this is a key and a integrity check. the key is not stored but it is tested against a encrypted value
+pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
+    // This function generates to key we use to encrypt data
+    // The key is not actually stored but a value is encrypted with
+    // A generated key and saved. At decryption time the key is checked against
+    // The stored value. If it is the the same value are originally encrypted
+    // We can attempt to decrypt the data given
 
     let salt: String = fetch_chunk_helper(1);
     let secret: String = fetch_chunk_helper(array_arimitics() - 1);
-    let num: u32 = "95180".parse().expect("Not a number!");
-    let iteration = std::num::NonZeroU32::new(num).unwrap();
+    let num: u32 = match "95180".parse() {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                RecsErrorType::InvalidTypeGiven,
+            )))
+        }
+    };
+    let iteration = match std::num::NonZeroU32::new(num) {
+        Some(d) => d,
+        None => {
+            return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                RecsErrorType::InvalidTypeGiven,
+            )))
+        }
+    };
     let mut password_key = [0; 16]; // Setting the key size
 
     pbkdf2::derive(
@@ -57,27 +76,69 @@ pub fn generate_user_key() -> bool {
     // * creating the integrity file
 
     let secret: String = "The hotdog man isn't real !?".to_string();
-    let cipher_integrity: String = encrypt(secret, userkey, 1024);
-    // ! ^ this will be static since key sizes are really small
+    let cipher_integrity: String = match encrypt(secret.into(), userkey, 1024) {
+        Ok(d) => d,
+        Err(e) => return Err(e),
+    };
+    // ! ^ this will use a static buffer size
 
-    if is_path(&USER_KEY_LOCATION){
-        del_file(&USER_KEY_LOCATION);
+    if is_path(&USER_KEY_LOCATION) {
+        match debug {
+            true => {
+                del_file(&USER_KEY_LOCATION);
+                append_log(unsafe { &PROGNAME }, "The old userkey has been deleted")
+            }
+            false => match del_file(&USER_KEY_LOCATION) {
+                Ok(_) => Ok(()),
+                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+            },
+        };
     }
 
     // creating the master.json file
-    let mut userkey_file = OpenOptions::new()
+    let mut userkey_file = match OpenOptions::new()
         .create_new(true)
         .write(true)
         .append(true)
         .open(&USER_KEY_LOCATION)
-        .expect("File could not written to");
+    {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                system::errors::SystemErrorType::ErrorCreatingFile,
+                &format!(
+                    "An erro occoured while creating the master json file: {}",
+                    e.to_string()
+                ),
+            )))
+        }
+    };
 
-    if let Err(e) = write!(userkey_file, "{}", cipher_integrity) {
-        let msg: String = format!("Error couldn't write user key to the path specified: {}", e.to_string());
-        append_log(PROG,&msg);
-        eprintln!("{}", &msg);
-        return false;
-    }
+    match write!(userkey_file, "{}", cipher_integrity) {
+        Ok(_) => match debug {
+            true => append_log(
+                unsafe { &PROGNAME },
+                &format!(
+                    "THIS IS A SECRET. The userkey check has been generated: {}",
+                    &cipher_integrity
+                ),
+            ),
+            false => Ok(()),
+        },
+        Err(e) => {
+            append_log(
+                unsafe { &PROGNAME },
+                "An error occoured while writing data to the master json file",
+            );
+            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                system::errors::SystemErrorType::ErrorOpeningFile,
+                &format!(
+                    "Error couldn't write user key to the path specified: {}",
+                    e.to_string()
+                ),
+            )));
+        }
+    };
 
     let checksum_string = create_hash(&cipher_integrity);
 
@@ -97,33 +158,74 @@ pub fn generate_user_key() -> bool {
     let userkey_map_path = format!("{}/userkey.map", *MAPS);
 
     // Deleting and recreating the json file
-    del_dir(&userkey_map_path);
+    match del_file(&userkey_map_path) {
+        Ok(_) => match debug {
+            true => append_log(unsafe { &PROGNAME }, "Deleting old usrkey if it exists"),
+            false => Ok(()),
+        },
+        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+    };
 
     // writting to the master.json file
-    let mut userkey_map_file = OpenOptions::new()
+    let mut userkey_map_file = match OpenOptions::new()
         .create_new(true)
         .write(true)
         .append(true)
         .open(userkey_map_path)
-        .expect("File could not written to");
+    {
+        Ok(d) => d,
+        Err(e) => {
+            append_log(
+                unsafe { &PROGNAME },
+                &format!(
+                    "Failed to open the new userkey.json path {}",
+                    &userkey_map_path
+                ),
+            );
+            return Err(RecsRecivedErrors::SystemError(SystemError::new(
+                system::errors::SystemErrorType::ErrorOpeningFile,
+            )));
+        }
+    };
 
-    if let Err(_e) = writeln!(userkey_map_file, "{}", pretty_userkey_map) {
-        eprintln!("An error occoured");
-        append_log(PROG,"Could save map data to file");
-    }
-
-    append_log(PROG,"User authentication created");
-    return true;
+    match writeln!(userkey_map_file, "{}", pretty_userkey_map) {
+        Ok(d) => {
+            append_log(unsafe { &PROGNAME }, "User authentication created");
+            return Ok(());
+        }
+        Err(e) => {
+            append_log(unsafe { &PROGNAME }, "Could save map data to file");
+            return Err(RecsRecivedErrors::SystemError(SystemError::new(
+                system::errors::SystemErrorType::ErrorOpeningFile,
+            )));
+        }
+    };
 }
 
-pub fn auth_user_key() -> String {
-    // ! patched to just used fixed key
-    append_log(PROG,"user key authentication request started");
+pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
+    append_log(
+        unsafe { &PROGNAME },
+        "user key authentication request started",
+    );
 
     let salt: String = fetch_chunk_helper(1);
     let secret: String = fetch_chunk_helper(array_arimitics() - 1);
-    let num: u32 = "95180".parse().expect("Not a number!");
-    let iteration = std::num::NonZeroU32::new(num).unwrap();
+    let num: u32 = match "95180".parse() {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                RecsErrorType::InvalidTypeGiven,
+            )))
+        }
+    };
+    let iteration = match std::num::NonZeroU32::new(num) {
+        Some(d) => d,
+        None => {
+            return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                RecsErrorType::InvalidTypeGiven,
+            )))
+        }
+    };
     let mut password_key = [0; 16]; // Setting the key size
 
     pbkdf2::derive(
@@ -137,35 +239,64 @@ pub fn auth_user_key() -> String {
     let userkey = hex::encode(&password_key);
     let secret: String = "The hotdog man isn't real !?".to_string();
     // ! make the read the userkey from the map in the future
-    let verification_ciphertext: String =
-        read_to_string(USER_KEY_LOCATION).expect("Couldn't read the map file");
+    let verification_ciphertext: String = match read_to_string(USER_KEY_LOCATION) {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                system::errors::SystemErrorType::ErrorReadingFile,
+                &e.to_string(),
+            )))
+        }
+    };
 
     let verification_result: String =
-        decrypt(verification_ciphertext.to_string(), userkey.clone());
+        match decrypt(&verification_ciphertext.to_string(), userkey.clone()) {
+            Ok(d) => String::from_utf8_lossy(&d).to_string(),
+            Err(e) => return Err(e),
+        };
 
-    if verification_result == secret {
-        return userkey;
-    } else {
-        append_log(PROG, "Authentication request failed");
-        eprintln!("Auth error");
-        exit(1);
-    }
+    match verification_result == secret {
+        true => return Ok(userkey),
+        false => {
+            append_log(unsafe { &PROGNAME }, "Authentication request failed");
+            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                RecsErrorType::InvalidAuthRequest,
+                &format!("Given: {} Expected: {}", &verification_result, &secret),
+            )));
+        }
+    };
 }
-
 
 // todo change these security goals for multi system things
 
-pub fn create_writing_key(key: String) -> String {
+pub fn create_writing_key(key: String) -> Result<String, RecsRecivedErrors> {
     // golang compatible ????
     let mut prekey_str: String = String::new();
     prekey_str.push_str(&key);
-    prekey_str.push_str(&auth_user_key());
+    prekey_str.push_str(match auth_user_key() {
+        Ok(d) => &d,
+        Err(e) => return Err(e),
+    });
 
     let prekey = create_hash(&prekey_str);
 
     let salt: String = fetch_chunk_helper(1);
-    let num: u32 = "95180".parse().expect("Not a number!");
-    let iteration = std::num::NonZeroU32::new(num).unwrap();
+    let num: u32 = match "95180".parse() {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                RecsErrorType::InvalidTypeGiven,
+            )))
+        }
+    };
+    let iteration = match std::num::NonZeroU32::new(num) {
+        Some(d) => d,
+        None => {
+            return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                RecsErrorType::InvalidTypeGiven,
+            )))
+        }
+    };
     let mut final_key = [0; 16];
 
     pbkdf2::derive(
@@ -176,10 +307,10 @@ pub fn create_writing_key(key: String) -> String {
         &mut final_key,
     );
 
-    return hex::encode(final_key);
+    return Ok(hex::encode(final_key));
 }
 
-// * helper funtion for fetching chunks 
+// * helper funtion for fetching chunks
 fn fetch_chunk_helper(num: u32) -> String {
     let chunk_data: Option<String> = match fetch_chunk(num) {
         Some(data) => Some(data),
@@ -187,7 +318,7 @@ fn fetch_chunk_helper(num: u32) -> String {
     };
 
     if chunk_data == None {
-        append_log(PROG, &format!("Error could not fetch the key: {}", num));
+        append_log(unsafe { &PROGNAME }, &format!("Error could not fetch the key: {}", num));
         halt(&format!("Failed to fetch chunk data for number 1"));
     };
 

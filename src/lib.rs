@@ -8,13 +8,16 @@ mod auth;
 mod config;
 #[path = "system/encrypt.rs"]
 mod encrypt;
+pub mod errors;
 #[path = "enviornment.rs"]
 mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
 
-use logging::{append_log, start_log};
-use secret::{write_raw, read_raw};
+use errors::RecsRecivedErrors;
+use logging::{append_log, errors::MyErrors, start_log};
+use pretty::output;
+use secret::{read_raw, write_raw};
 use system::{del_file, is_path};
 
 use std::{
@@ -28,28 +31,64 @@ use crate::{
     array_tools::fetch_chunk,
     config::{ARRAY_LEN, CHUNK_SIZE, SYSTEM_ARRAY_LOCATION},
     encrypt::create_hash,
-    local_env::{set_system, MAPS, META, PROG, VERSION},
+    local_env::{set_system, MAPS, META, VERSION},
     secret::{forget, read, write},
 };
 
-// !? Allow this as a toggle flag later
-fn check_debug() {
-    use std::env;
-    env::set_var("RUST_BACKTRACE", "1");
+/// Debugging should be set while initializing the lib, If no defined the default is disabled
+pub static mut DEBUGGING: Option<bool> = None;
+
+/// The PROG variable must be defined for logging, When this lib is used by diffrent programs, this will be the diffrenciator for the log files
+pub static mut PROGNAME: String = String::from("undefined");
+
+fn set_debug(option: bool) {
+    // Enables longer backtraces and enables more verbose logging
+    match option {
+        true => unsafe { DEBUGGING = Some(true) },
+        false => unsafe { DEBUGGING = Some(false) },
+    }
 }
 
-pub fn initialize(debug: bool) {
-    start_log(PROG);
-    if debug {
-        check_debug();
+pub fn initialize(prog: String) {
+    let debugging: bool = match unsafe { DEBUGGING } {
+        Some(d) => match d {
+            true => true,
+            false => false,
+        },
+        None => false,
+    };
+
+    let debug: bool = match &debugging {
+        true => {
+            use std::env;
+            env::set_var("RUST_BACKTRACE", "1");
+            true
+        }
+        false => {
+            false
+        },
+    };
+
+    match start_log(unsafe { &PROG }) {
+        Ok(_) => (),
+        Err(e) => RecsRecivedErrors::display(RecsRecivedErrors::repack(e), false),
     }
 
-    ensure_system_path();
+    ensure_system_path(unsafe { &PROG }, debug);
     ensure_max_map_exists();
 }
 
-fn ensure_system_path() {
+fn ensure_system_path(prog: &str, debug: bool) {
+    match is_path(SYSTEM_ARRAY_LOCATION) {
+        true => todo!(),
+        false => {
+            append_log(prog, "System array file does not exist, re initializing recs");
+            set_system(debug);
+        },
+    }
+    
     if !is_path(SYSTEM_ARRAY_LOCATION) {
+
         set_system();
     }
 }
@@ -109,10 +148,14 @@ pub fn encrypt_raw(data: String) -> (Option<String>, Option<String>, Option<usiz
     }
 }
 
-pub fn decrypt_raw(recs_data: String, recs_key: String, recs_chunks: usize) -> (Option<bool>, Option<Vec<u8>>) {
-    match read_raw(recs_data, recs_key, recs_chunks){
+pub fn decrypt_raw(
+    recs_data: String,
+    recs_key: String,
+    recs_chunks: usize,
+) -> (Option<bool>, Option<Vec<u8>>) {
+    match read_raw(recs_data, recs_key, recs_chunks) {
         (true, Some(data)) => (Some(true), Some(data)),
-        (_, _) => (Some(false), None)
+        (_, _) => (Some(false), None),
     }
 }
 

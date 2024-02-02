@@ -1,24 +1,23 @@
 // use nix::unistd::geteuid;
 use lazy_static::lazy_static;
 use logging::append_log;
+use serde::de;
 use sysinfo::{System, SystemExt};
-use system::{del_dir, is_path, make_dir}; // for finding free ram for vectors
+use system::{create_hash, del_dir, is_path, make_dir, remake_dir}; // for finding free ram for vectors
 
 use crate::{
-    array::{generate_system_array, index_system_array},
-    auth::generate_user_key,
-    config::STREAMING_BUFFER_SIZE,
-    encrypt::create_hash,
+    array::{generate_system_array, index_system_array}, auth::generate_user_key, config::STREAMING_BUFFER_SIZE, errors::{RecsError, RecsRecivedErrors}, PROGNAME
 };
 
 // Static stuff
 pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
-pub const PROG: &str = "recs"; // THIS HAS TO BE DEFINED SOMEWHERE ELSE
 
 // semi static
 lazy_static! {
     // Default rescs directory
-    pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(&PROG.to_string()));
+    #[derive(Debug)]
+    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("/usr/recs/{}/array.recs", create_hash(&unsafe { PROGNAME }.to_string()));
+    pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(&unsafe { PROGNAME }.to_string()));
     // Paths for important things
     pub static ref ARRAY_PATH: String = format!("/usr/recs");
     pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.clone());
@@ -27,49 +26,60 @@ lazy_static! {
 }
 // !  enviornment as in program
 
-pub fn set_system() {
-    make_folders();
+pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
+    // This functions is responsible for creating the dir tree,
+    // It also monitors the output of the functions that create keys and indexs for them
+    match make_folders(debug) {
+        Ok(_) => (),
+        Err(e) => return Err(e),
+    };
 
-    if generate_system_array() == true {
-        if index_system_array() == false {
-            eprintln!("An error occoured while initializing check log");
+    match generate_system_array(debug) {
+        Ok(_) => {
+            match index_system_array() {
+                Ok(_) => match debug {
+                    true => append_log(unsafe { &PROGNAME }, "System array has been created and indexed"),
+                    false => Ok(()),
+                },
+                Err(e) => return Err(e),
+            };
         }
-    } else {
-        eprintln!("An error occoured while initializing check log");
-    }
+        Err(e) => return Err(e),
+    };
 
-    generate_user_key();
+    match generate_user_key(debug) {
+        Ok(_) => Ok(()),
+        Err(e) => return Err(e),
+    }
 }
 
 // ! enviornment as in file paths
 
-fn make_folders() {
+fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
     // * Verifing path exists and creating missing ones
 
     match make_dir(&SYSTEM_PATH) {
-        Some(b) => match b {
-            true => {
-                let mut paths = vec![];
-                paths.insert(0, DATA.clone());
-                paths.insert(1, MAPS.clone());
-                paths.insert(2, META.clone());
-                paths.insert(2, ARRAY_PATH.clone());
+        Ok(_) => {
+            // we're ok to populate folder tree
+            let mut paths = vec![];
+            paths.insert(0, DATA.clone());
+            paths.insert(1, MAPS.clone());
+            paths.insert(2, META.clone());
+            paths.insert(2, ARRAY_PATH.clone());
 
-                for path in paths.iter() {
-                    if is_path(path) {
-                        del_dir(path);
-                        make_dir(path);
-                    } else {
-                        make_dir(path);
-                    }
-                }
-
-                append_log(PROG, "Folders recreated");
+            for path in paths.iter() {
+                match remake_dir(path) {
+                    Ok(_) => match debug {
+                        true => append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path)),
+                        false => Ok(()),
+                    },
+                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                };
             }
-            false => panic!("Making directories failed"),
-        },
-        None => panic!("Making directories failed"),
-    }
+        }
+        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+    };
+    Ok(())
 }
 
 // ! enviornment as in system

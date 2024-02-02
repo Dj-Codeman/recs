@@ -1,12 +1,4 @@
 
-	// DEBUG
-	// show in depth stack info on panics
-
-// pub const DEBUG: bool = true;
-
-
-pub const SYSTEM_ARRAY_LOCATION: &str = "/usr/recs/array.recs";
-
 	//	The user key is derived from the users specific password
 	//	This is the key used to encrypt the files while
 	//	the maps will still use the system array
