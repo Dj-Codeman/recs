@@ -1,4 +1,5 @@
 use logging::{append_log, errors::MyErrors};
+use pretty::warn;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
@@ -92,6 +93,7 @@ fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
             Ok(_) => return Ok(()),
             Err(e) => {
                 let _ = append_log(unsafe { PROGNAME }, &e.to_string());
+                warn(&e.to_string());
                 return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                     system::errors::SystemErrorType::ErrorCreatingFile,
                     &e.to_string(),
@@ -100,6 +102,7 @@ fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
         },
         Err(e) => {
             let _ = append_log(unsafe { PROGNAME }, &e.to_string());
+            warn(&e.to_string());
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                 system::errors::SystemErrorType::ErrorCreatingFile,
                 &e.to_string(),
