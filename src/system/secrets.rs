@@ -814,7 +814,6 @@ pub fn read(
                     // take the first spliiting chunk into signature and cipher data
                     let encoded_signature: &str = truncate(&secret_buffer, 64); // 61 + how ever big the chunk count is
                     let cipher_buffer: &str = &secret_buffer[64..];
-                    notice(&cipher_buffer);
 
                     // * decrypting the chunk
                     let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &writting_key) {
@@ -1013,7 +1012,6 @@ fn verify_signature(
     let _sig_digit_count = truncate(&signature, 1); // remember it exists
 
     let sig_version = truncate(&signature[3..], 6);
-    notice(&sig_version);
 
     // Defining one variable that will hold the last warning if any
     let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![];
@@ -1041,6 +1039,7 @@ fn verify_signature(
     let sig_hash: String = truncate(&signature[10..], 19).to_owned();
     notice(&sig_hash);
     let new_hash: String = truncate(&create_hash(new_hash_data.clone()), 20).to_owned();
+    notice(&new_hash);
 
     warnings.push(match sig_hash == new_hash {
         true => None,
