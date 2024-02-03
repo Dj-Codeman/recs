@@ -1,6 +1,6 @@
 use hex::encode;
 use logging::append_log;
-use pretty::{notice, warn};
+use pretty::warn;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -241,7 +241,6 @@ pub fn write(
 
                     // hexing all the data for handeling
                     let signature: String = hex::encode(sig_data);
-                    warn(&signature);
                     // * Running the actual encryption
                     let secret_buffer = match encrypt(
                         encoded_buffer.as_bytes().to_vec(),
@@ -258,15 +257,12 @@ pub fn write(
                         Ok(d) => d,
                         Err(e) => return Err(e),
                     };
-                    warn(&secret_buffer);
 
                     // this is the one var thatll be pushed to file
                     let mut processed_chunk: String = String::new();
                     processed_chunk.push_str(&signature);
                     processed_chunk.push_str(&secret_buffer);
                     // ! THIS IS WHERER THE FILE IS OPENED
-
-                    notice(&processed_chunk);
 
                     let result: Result<(), RecsRecivedErrors> = match secret_file.as_mut() {
                         Ok(file) => write!(file, "{}", processed_chunk).map_err(|_| {
