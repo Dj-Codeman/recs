@@ -3,7 +3,7 @@ use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
 use logging::append_log;
-use pretty::{dump, output, warn};
+use pretty::{dump, notice, output, warn};
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
 use std::str;
@@ -157,6 +157,7 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
             return Ok(decrypted_bytes.to_vec());
         }
         false => {
+            notice("What");
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::InvalidHMACData,
             )))
