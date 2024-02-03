@@ -102,6 +102,7 @@ pub enum RecsErrorType {
     InvalidChunkData,
     InvalidHMACData,
     InvalidHMACSize,
+    InvalidKey,
     InvalidHexData,
     InvalidIvData,
     InvalidBlockData,
@@ -180,6 +181,7 @@ impl RecsError {
             RecsErrorType::InvalidHexData => String::from("An error occoured while de-crypting, data that was expected to be hex formatted that was not"),
             RecsErrorType::InvalidSignature => String::from("The data given has not passed the integrity test"),
             RecsErrorType::InvalidFile => String::from("The file path specified by the secret map doesn'y exist"),
+            RecsErrorType::InvalidKey => String::from("An error occoured while preparing the key for encryption"),
             
 
         }

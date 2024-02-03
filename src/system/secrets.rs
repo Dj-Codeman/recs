@@ -148,7 +148,7 @@ pub fn write(
         let cipher_data_map = match encrypt(
             pretty_data_map,
             match fetch_chunk_helper(1) {
-                Ok(d) => d,
+                Ok(d) => d.into(),
                 Err(e) => return Err(e),
             },
             1024,
@@ -241,7 +241,7 @@ pub fn write(
                             Err(e) => return Err(e),
                         }) {
                             // TODO ^ Simplyfy this. It is I/o intensive needed multiple files calls multiple times a second
-                            Ok(d) => d,
+                            Ok(d) => d.into(),
                             Err(e) => return Err(e),
                         },
                         buffer_size,

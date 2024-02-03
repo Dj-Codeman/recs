@@ -1,6 +1,6 @@
 use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
-use hex;
+use hex::{self, encode};
 use hmac::{Hmac, Mac};
 use pretty::notice;
 use rand::{distributions::Alphanumeric, Rng};
@@ -39,29 +39,41 @@ fn create_iv() -> String {
 
 pub fn encrypt(
     data: Vec<u8>,
-    key: String,
+    key: Vec<u8>,
     buffer_size: usize,
 ) -> Result<String, RecsRecivedErrors> {
     let iv = create_iv();
-    let plain_data = data;
-    let key = key.as_bytes();
-    let cipher = Aes256Cbc::new_from_slices(&key, iv.as_bytes()).unwrap();
-    let pad_len = plain_data.len();
+    let key: Vec<u8> = key.try_into().map_err(|_| {
+        RecsRecivedErrors::RecsError(RecsError::new_details(
+            RecsErrorType::InvalidKey,
+            "Invalid key length",
+        ))
+    })?;
 
-    let mut buffer: Vec<u8> = vec![0; buffer_size * 8];
-    // let mut buffer = [0u8; 256];
+    let cipher = Aes256Cbc::new_from_slices(&key, iv.as_bytes()).map_err(|e| {
+        RecsRecivedErrors::RecsError(RecsError::new_details(
+            RecsErrorType::InvalidBlockData,
+            &e.to_string(),
+        ))
+    })?;
 
-    buffer[..pad_len].copy_from_slice(&plain_data);
+    let pad_len = data.len();
+    let mut buffer: Vec<u8> = vec![0; buffer_size];
 
-    let ciphertext = hex::encode(match cipher.encrypt(&mut buffer, pad_len) {
-        Ok(d) => d,
-        Err(e) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InvalidBlockData,
-                &e.to_string(),
-            )))
-        }
-    });
+    buffer[..pad_len].copy_from_slice(&data);
+
+    let ciphertext = encode(
+        match cipher.encrypt(&mut buffer, pad_len) {
+            Ok(d) => d,
+            Err(e) => {
+                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                    RecsErrorType::InvalidBlockData,
+                    &e.to_string(),
+                )))
+            }
+        },
+    );
+
     notice(&ciphertext);
 
     let mut cipherdata = String::new();
@@ -70,14 +82,11 @@ pub fn encrypt(
     cipherdata.push_str(&iv);
 
     // creating hmac
-    let hmac = match create_hmac(&cipherdata) {
-        Ok(d) => d,
-        Err(e) => return Err(e),
-    };
+    let hmac = create_hmac(&cipherdata)?;
 
     cipherdata.push_str(&hmac);
 
-    return Ok(cipherdata);
+    Ok(cipherdata)
 }
 
 pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors> {
@@ -167,7 +176,7 @@ fn create_hmac(cipherdata: &str) -> Result<String, RecsRecivedErrors> {
     };
 
     mac.update(cipherdata.as_bytes());
-    let hmac = truncate(&hex::encode(mac.finalize().into_bytes()), 64).to_string();
+    let hmac = truncate(&hex::encode(mac.finalize().into_bytes()), 64).to_owned();
 
     match hmac.len() == 64 {
         true => return Ok(hmac),

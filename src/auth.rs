@@ -81,7 +81,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     // * creating the integrity file
 
     let secret: String = "The hotdog man isn't real !?".to_string();
-    let cipher_integrity: String = match encrypt(secret.into(), userkey, 1024) {
+    let cipher_integrity: String = match encrypt(secret.into(), userkey.into(), 1024) {
         Ok(d) => d,
         Err(e) => return Err(e),
     };
