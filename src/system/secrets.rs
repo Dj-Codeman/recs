@@ -1058,7 +1058,7 @@ fn verify_signature(
         }
     });
 
-    let sig_count = match signature[30..].parse::<usize>() {
+    let sig_count = match signature[31..].parse::<usize>() {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
