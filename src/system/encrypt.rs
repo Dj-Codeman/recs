@@ -179,7 +179,7 @@ fn create_hmac(cipherdata: &str) -> Result<String, RecsRecivedErrors> {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InvalidHMACData,
+                RecsErrorType::InvalidHMACSize,
                 &e.to_string(),
             )))
         }
