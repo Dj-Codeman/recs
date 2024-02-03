@@ -1031,6 +1031,7 @@ fn verify_signature(
     let new_hash_data: String = match String::from_utf8(encoded_buffer.to_vec()) {
         Ok(d) => d,
         Err(e) => {
+            notice(&e.to_string());
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
                 RecsErrorType::InvalidTypeGiven,
                 &e.to_string(),
