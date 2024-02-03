@@ -76,8 +76,6 @@ pub fn encrypt(
         }
     });
 
-    notice(&ciphertext);
-
     let mut cipherdata = String::new();
 
     cipherdata.push_str(&ciphertext);

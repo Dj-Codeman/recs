@@ -1,5 +1,6 @@
 use hex::encode;
 use logging::append_log;
+use pretty::notice;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -187,7 +188,12 @@ pub fn write(
             .open(&secret_path);
 
         match secret_file {
-            Ok(_) => (),
+            Ok(_) => {
+                let _ = append_log(
+                    unsafe { &PROGNAME },
+                    &format!("File created: {}", &secret_path),
+                );
+            }
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 let _ = append_log(
                     unsafe { &PROGNAME },
@@ -258,6 +264,8 @@ pub fn write(
                     processed_chunk.push_str(&secret_buffer);
                     // ! THIS IS WHERER THE FILE IS OPENED
 
+                    notice(&processed_chunk);
+
                     match write!(
                         match secret_file.as_mut() {
                             Ok(d) => d,
@@ -270,7 +278,7 @@ pub fn write(
                         "{}",
                         processed_chunk
                     ) {
-                        Ok(()) => (),
+                        Ok(_) => (),
                         Err(e) => {
                             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
                                 RecsErrorType::Error,
