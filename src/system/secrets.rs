@@ -68,7 +68,7 @@ pub fn write(
 
     // * The size of the buffer has to be bigger than the file size because it's expanded
     // * by reading it as bytes
-    let fit_buffer: usize = match (file_size * 2).try_into() {
+    let fit_buffer: usize = match (file_size).try_into() {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
