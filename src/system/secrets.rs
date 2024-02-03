@@ -1,6 +1,5 @@
 use hex::encode;
 use logging::append_log;
-use pretty::{notice, warn};
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -908,7 +907,8 @@ pub fn read(
                 Err(e) => return Err(e),
             }
         }
-        return Ok(vec![None]); // return ok val with no warnings
+        let _ = append_log(unsafe { PROGNAME }, &format!("Decrypting request: {} has been decrypted !", &secret_map.file_path));
+        return Ok(warnings); // return ok val with no warnings
     } else {
         let _ = append_log(unsafe { &PROGNAME }, "The secret map doen't exist");
         return Err(RecsRecivedErrors::RecsError(RecsError::new(
@@ -1037,9 +1037,7 @@ fn verify_signature(
     };
     // pulling the hash from the signature
     let sig_hash: String = truncate(&signature[10..], 20).to_owned();
-    notice(&sig_hash);
     let new_hash: String = truncate(&create_hash(new_hash_data.clone()), 20).to_owned();
-    notice(&new_hash);
 
     warnings.push(match sig_hash == new_hash {
         true => None,
@@ -1075,6 +1073,7 @@ fn verify_signature(
         ))),
     });
 
+    let _ = append_log(unsafe { PROGNAME }, &format!("Decrypting request: {} signatures verified, writing", &new_hash));
     return Ok(warnings);
 }
 
