@@ -157,7 +157,6 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
             return Ok(decrypted_bytes.to_vec());
         }
         false => {
-            notice("What");
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::InvalidHMACData,
             )))
