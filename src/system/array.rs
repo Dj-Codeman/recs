@@ -59,13 +59,10 @@ pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
             return Ok(true);
         }
         Err(e) => {
-            match append_log(
+            let _ = append_log(
                 unsafe { &PROGNAME },
                 &format!("Could not write the system_array to the path specified: "),
-            ) {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::repack(e)),
-            };
+            );
             return Err(e);
         }
     }
