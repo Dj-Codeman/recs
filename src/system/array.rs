@@ -1,5 +1,5 @@
 use logging::{append_log, errors::MyErrors};
-use pretty::warn;
+use pretty::{notice, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
@@ -83,32 +83,29 @@ fn create_system_array_contents() -> String {
 }
 
 fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
-    match OpenOptions::new()
+    notice(&SYSTEM_ARRAY_LOCATION);
+    let mut system_array_file = OpenOptions::new()
         .create_new(true)
         .write(true)
         .append(true)
         .open(SYSTEM_ARRAY_LOCATION.to_owned())
-    {
-        Ok(mut system_array_file) => match write!(system_array_file, "{}", contents) {
-            Ok(_) => return Ok(()),
-            Err(e) => {
-                let _ = append_log(unsafe { PROGNAME }, &e.to_string());
-                warn(&e.to_string());
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    system::errors::SystemErrorType::ErrorCreatingFile,
-                    &e.to_string(),
-                )));
-            }
-        },
-        Err(e) => {
+        .map_err(|e| {
             let _ = append_log(unsafe { PROGNAME }, &e.to_string());
-            warn(&e.to_string());
-            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+            RecsRecivedErrors::SystemError(SystemError::new_details(
                 system::errors::SystemErrorType::ErrorCreatingFile,
                 &e.to_string(),
-            )));
-        }
-    }
+            ))
+        })?;
+
+    write!(system_array_file, "{}", contents).map_err(|e| {
+        let _ = append_log(unsafe { PROGNAME }, &e.to_string());
+        RecsRecivedErrors::SystemError(SystemError::new_details(
+            system::errors::SystemErrorType::ErrorCreatingFile,
+            &e.to_string(),
+        ))
+    })?;
+
+    Ok(())
 }
 
 // indexing the created array
