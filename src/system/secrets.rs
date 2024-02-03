@@ -313,7 +313,7 @@ pub fn write(
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     // reached end of file
-                    warn("Unexpected end of file");
+                    let _ = append_log(unsafe { PROGNAME }, &format!("Finished reading data from {}", &filename));
                     break;
                 }
                 Err(e) => {

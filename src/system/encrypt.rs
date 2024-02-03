@@ -3,6 +3,7 @@ use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
 use logging::append_log;
+use pretty::{dump, output};
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
 use std::str;
@@ -183,10 +184,10 @@ fn create_hmac(cipherdata: &str) -> Result<String, RecsRecivedErrors> {
 
     mac.update(cipherdata.as_bytes());
     let hmac = truncate(&hex::encode(mac.finalize().into_bytes()), 64).to_owned();
-
     match hmac.len() == 64 {
         true => return Ok(hmac),
         false => {
+            dump(&hmac);
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::InvalidHMACSize,
             )))
