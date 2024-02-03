@@ -2,7 +2,7 @@
 use lazy_static::lazy_static;
 use logging::append_log;
 use sysinfo::{System, SystemExt};
-use system::{create_hash, make_dir, remake_dir}; // for finding free ram for vectors
+use system::{create_hash, make_dir}; // for finding free ram for vectors
 
 use crate::{
     array::{generate_system_array, index_system_array},
@@ -72,7 +72,7 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
             paths.insert(2, ARRAY_PATH.clone());
 
             for path in paths.iter() {
-                let _ = match remake_dir(path) {
+                let _ = match make_dir(path) {
                     Ok(_) => match debug {
                         true => {
                             append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path))

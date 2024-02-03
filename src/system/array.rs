@@ -51,27 +51,26 @@ pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
 
     // Write the system array contents to the file
     match write_system_array_to_file(&system_array_contents) {
-        true => {
+        Ok(_) => {
             match append_log(unsafe { &PROGNAME }, "Created system array") {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             };
             return Ok(true);
-        }
-        false => {
+        },
+        Err(e) => {
             match append_log(
                 unsafe { &PROGNAME },
-                "Could not write the system_array to the path specified",
+                &format!("Could not write the system_array to the path specified: "),
             ) {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             };
-            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InitializationError,
-                "Could not write the system_array to the path specified",
-            )));
-        }
+            return Err(e);
+        },
     }
+
+        
 }
 
 fn create_system_array_contents() -> String {
@@ -87,21 +86,26 @@ fn create_system_array_contents() -> String {
     )
 }
 
-fn write_system_array_to_file(contents: &str) -> bool {
+fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
     match OpenOptions::new()
         .create_new(true)
         .write(true)
         .append(true)
         .open(SYSTEM_ARRAY_LOCATION.to_string())
     {
-        Ok(mut system_array_file) => {
-            if let Err(_) = write!(system_array_file, "{}", contents) {
-                false
-            } else {
-                true
+        Ok(mut system_array_file) => match write!(system_array_file, "{}", contents) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                    system::errors::SystemErrorType::ErrorCreatingFile,
+                    &e.to_string(),
+                )))
             }
-        }
-        Err(_) => false,
+        },
+        Err(e) => return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+            system::errors::SystemErrorType::ErrorCreatingFile,
+            &e.to_string(),
+        ))),
     }
 }
 
