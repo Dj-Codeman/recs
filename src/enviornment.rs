@@ -21,11 +21,11 @@ lazy_static! {
     #[derive(Debug)]
     pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(unsafe { PROGNAME.to_owned() }));
     // Paths for important things
-    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("{}/array.recs", SYSTEM_PATH.to_owned());
     pub static ref ARRAY_PATH: String = format!("/usr/recs");
-    pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.clone());
-    pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.clone());
-    pub static ref META: String = format!("{}/meta", SYSTEM_PATH.clone());
+    pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.to_owned());
+    pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.to_owned());
+    pub static ref META: String = format!("{}/meta", SYSTEM_PATH.to_owned());
+    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("{}/array.recs", ARRAY_PATH.to_owned());
 }
 // !  enviornment as in program
 
