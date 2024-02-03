@@ -65,7 +65,7 @@ pub fn write(
     // Of systems with a bigger amounts of ram, Currently I don't actually know if the way this buffer is desinged
     // accomplishes what it's supposed to but as long as it compiles ill take it
 
-    let fit_buffer: usize = match (file_size / 2).try_into() {
+    let fit_buffer: usize = match (file_size * 2).try_into() {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
