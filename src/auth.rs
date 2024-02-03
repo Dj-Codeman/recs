@@ -53,7 +53,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
-        Err(e) => {
+        Err(_) => {
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::InvalidTypeGiven,
             )))
@@ -90,11 +90,17 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     if is_path(&USER_KEY_LOCATION) {
         match debug {
             true => {
-                del_file(&USER_KEY_LOCATION);
-                append_log(unsafe { &PROGNAME }, "The old userkey has been deleted")
+                match del_file(&USER_KEY_LOCATION) {
+                    Ok(_) => (),
+                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                };
+                match append_log(unsafe { &PROGNAME }, "The old userkey has been deleted") {
+                    Ok(_) => (),
+                    Err(e) => return Err(RecsRecivedErrors::repack(e)),
+                }
             }
             false => match del_file(&USER_KEY_LOCATION) {
-                Ok(_) => Ok(()),
+                Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
             },
         };
@@ -119,7 +125,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         }
     };
 
-    match write!(userkey_file, "{}", cipher_integrity) {
+    let _ = match write!(userkey_file, "{}", cipher_integrity) {
         Ok(_) => match debug {
             true => append_log(
                 unsafe { &PROGNAME },
@@ -131,7 +137,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
             false => Ok(()),
         },
         Err(e) => {
-            append_log(
+            let _ = append_log(
                 unsafe { &PROGNAME },
                 "An error occoured while writing data to the master json file",
             );
@@ -145,7 +151,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         }
     };
 
-    let checksum_string = create_hash(&cipher_integrity);
+    let checksum_string = create_hash(cipher_integrity);
 
     // populated all the created data
     let userkey_map_data: KeyIndex = KeyIndex {
@@ -163,7 +169,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     let userkey_map_path = format!("{}/userkey.map", *MAPS);
 
     // Deleting and recreating the json file
-    match del_file(&userkey_map_path) {
+    let _ = match del_file(&userkey_map_path) {
         Ok(_) => match debug {
             true => append_log(unsafe { &PROGNAME }, "Deleting old usrkey if it exists"),
             false => Ok(()),
@@ -176,15 +182,15 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         .create_new(true)
         .write(true)
         .append(true)
-        .open(userkey_map_path)
+        .open(&userkey_map_path)
     {
         Ok(d) => d,
         Err(e) => {
-            append_log(
+            let _ = append_log(
                 unsafe { &PROGNAME },
                 &format!(
-                    "Failed to open the new userkey.json path {}",
-                    &userkey_map_path
+                    "Failed to open the new userkey.json path {}, {}",
+                    &userkey_map_path, e
                 ),
             );
             return Err(RecsRecivedErrors::SystemError(SystemError::new(
@@ -194,12 +200,12 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     };
 
     match writeln!(userkey_map_file, "{}", pretty_userkey_map) {
-        Ok(d) => {
-            append_log(unsafe { &PROGNAME }, "User authentication created");
+        Ok(_) => {
+            let _ = append_log(unsafe { &PROGNAME }, "User authentication created");
             return Ok(());
         }
         Err(e) => {
-            append_log(unsafe { &PROGNAME }, "Could save map data to file");
+            let _ = append_log(unsafe { &PROGNAME }, &format!("Could save map data to file: {}", e));
             return Err(RecsRecivedErrors::SystemError(SystemError::new(
                 system::errors::SystemErrorType::ErrorOpeningFile,
             )));
@@ -208,7 +214,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
 }
 
 pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
-    append_log(
+    let _ = append_log(
         unsafe { &PROGNAME },
         "user key authentication request started",
     );
@@ -223,7 +229,7 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
     };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
-        Err(e) => {
+        Err(_) => {
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::InvalidTypeGiven,
             )))
@@ -269,7 +275,10 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
     match verification_result == secret {
         true => return Ok(userkey),
         false => {
-            append_log(unsafe { &PROGNAME }, "Authentication request failed");
+            match append_log(unsafe { &PROGNAME }, "Authentication request failed") {
+                Ok(_) => (),
+                Err(e) => return Err(RecsRecivedErrors::repack(e)),
+            };
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
                 RecsErrorType::InvalidAuthRequest,
                 &format!("Given: {} Expected: {}", &verification_result, &secret),
@@ -283,13 +292,14 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
 pub fn create_writing_key(key: String) -> Result<String, RecsRecivedErrors> {
     // golang compatible ????
     let mut prekey_str: String = String::new();
-    prekey_str.push_str(&key);
-    prekey_str.push_str(match auth_user_key() {
-        Ok(d) => &d,
+    let user_key: String = match auth_user_key() {
+        Ok(d) => d,
         Err(e) => return Err(e),
-    });
+    };
+    prekey_str.push_str(&key);
+    prekey_str.push_str(&user_key);
 
-    let prekey = create_hash(&prekey_str);
+    let prekey = create_hash(prekey_str);
 
     let salt: String = match fetch_chunk_helper(1) {
         Ok(d) => d,
@@ -297,7 +307,7 @@ pub fn create_writing_key(key: String) -> Result<String, RecsRecivedErrors> {
     };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
-        Err(e) => {
+        Err(_) => {
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::InvalidTypeGiven,
             )))

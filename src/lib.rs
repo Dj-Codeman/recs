@@ -13,7 +13,6 @@ pub mod errors;
 mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
-
 use errors::RecsRecivedErrors;
 use local_env::SYSTEM_ARRAY_LOCATION;
 use logging::{append_log, start_log};
@@ -23,7 +22,6 @@ use system::{create_hash, del_file, is_path};
 use std::{
     fs::{File, OpenOptions},
     io::{Read, Write},
-    process::exit,
 };
 
 use crate::{
@@ -38,7 +36,8 @@ use crate::{
 pub static mut DEBUGGING: Option<bool> = None;
 
 /// The PROG variable must be defined for logging, When this lib is used by diffrent programs, this will be the diffrenciator for the log files
-pub static mut PROGNAME: String = String::from("undefined");
+pub static mut PROGNAME: &str = "";
+
 
 // Mandatory for the lib
 pub fn set_debug(option: bool) {
@@ -49,7 +48,7 @@ pub fn set_debug(option: bool) {
     }
 }
 
-pub fn initialize(prog: String) -> Result<(), RecsRecivedErrors> {
+pub fn initialize() -> Result<(), RecsRecivedErrors> {
     let debugging: bool = match unsafe { DEBUGGING } {
         Some(d) => match d {
             true => true,
@@ -89,10 +88,13 @@ fn ensure_system_path(prog: &str, debug: bool) -> Result<(), RecsRecivedErrors> 
     match is_path(&SYSTEM_ARRAY_LOCATION) {
         true => (), // Nothing needs to be done the lib with this name has  already been initialized
         false => {
-            append_log(
+            match append_log(
                 prog,
                 "System array file does not exist, re initializing recs",
-            );
+            ) {
+                Ok(_) => (),
+                Err(e) => return Err(RecsRecivedErrors::repack(e)),
+            };
 
             match set_system(debug) {
                 Ok(_) => (),
@@ -118,29 +120,25 @@ fn ensure_max_map_exists() -> Result<(), RecsRecivedErrors> {
 
 // Normal actions
 // TODO identify if exit0 is appropriate and revisit
-pub fn insert(filename: String, owner: String, name: String) -> Option<bool> {
+pub fn insert(filename: String, owner: String, name: String) -> Result<(), RecsRecivedErrors> {
     match write(filename, owner, name) {
-        (true, Some(_), Some(_)) => return Some(true),
-        (true, _, _) => {
-            eprintln!("Encryption succeded but proper meta data was not provided");
-            exit(1)
-        }
-        (_, _, _) => exit(1),
+        Ok(_) => return Ok(()),
+        Err(e) => return Err(e),
     }
 }
 
-pub fn retrive(owner: String, name: String) -> Option<bool> {
-    if !read(owner, name) {
-        exit(1);
+pub fn retrive(owner: String, name: String) -> Result<(), RecsRecivedErrors> {
+    match read(owner, name) {
+        Ok(_) => return Ok(()),
+        Err(e) => return Err(e),
     }
-    return Some(true);
 }
 
-pub fn remove(owner: String, name: String) -> Option<bool> {
-    if !forget(owner, name) {
-        exit(1);
+pub fn remove(owner: String, name: String) -> Result<(), RecsRecivedErrors> {
+    match forget(owner, name) {
+        Ok(_) => return Ok(()),
+        Err(e) => return Err(e),
     }
-    return Some(true);
 }
 
 pub fn ping(owner: String, name: String) -> bool {
@@ -148,17 +146,10 @@ pub fn ping(owner: String, name: String) -> bool {
     is_path(&secret_map_path)
 }
 
-pub fn encrypt_raw(data: String) -> (Option<String>, Option<String>, Option<usize>) {
-    match write_raw(data) {
-        (Some(key), Some(data), Some(chunks)) => (Some(key), Some(data), Some(chunks)),
-        (None, None, None) => {
-            eprintln!("No data provided");
-            (None, None, None)
-        }
-        (_, _, _) => {
-            eprintln!("Useless data provided");
-            (None, None, None)
-        }
+pub fn encrypt_raw(data: String) -> Result<(String, String, usize), RecsRecivedErrors> {
+    match write_raw(data.into()) {
+        Ok((key, data, chunks)) => return Ok((key, data, chunks)),
+        Err(e) => return Err(e),
     }
 }
 
@@ -166,14 +157,14 @@ pub fn decrypt_raw(
     recs_data: String,
     recs_key: String,
     recs_chunks: usize,
-) -> (Option<bool>, Option<Vec<u8>>) {
+) -> Result<Vec<u8>, RecsRecivedErrors> {
     match read_raw(recs_data, recs_key, recs_chunks) {
-        (true, Some(data)) => (Some(true), Some(data)),
-        (_, _) => (Some(false), None),
+        Ok((_warnings, data)) => Ok(data),
+        Err(e) => return Err(e),
     }
 }
 
-pub fn update_map(map_num: u32) -> bool {
+pub fn update_map(map_num: u32) -> bool { // Add a result to return errors from this
     // ? Getting the current map data
     let map_path: String = format!("{}/chunk_{}.map", *MAPS, map_num);
 
@@ -196,13 +187,13 @@ pub fn update_map(map_num: u32) -> bool {
 
     let new_hash: Option<String> = match chunk_data {
         (true, None) => None,
-        (true, Some(chunk)) => Some(create_hash(&chunk)),
+        (true, Some(chunk)) => Some(create_hash(chunk)),
         (false, None) => None,
         (false, Some(_)) => None,
     };
 
     if new_hash == None {
-        eprint!("Failed to fetch chunk data for number {}", &map_num);
+        let _ = append_log( unsafe { PROGNAME }, &format!("Failed to fetch chunk data for number {}", &map_num));
     }
 
     //  making new map
@@ -216,7 +207,7 @@ pub fn update_map(map_num: u32) -> bool {
     };
 
     // write the new map file
-    del_file(&map_path);
+    let _ = del_file(&map_path);
     let updated_map = serde_json::to_string_pretty(&new_map).unwrap();
 
     let mut map_file = OpenOptions::new()
@@ -228,7 +219,7 @@ pub fn update_map(map_num: u32) -> bool {
 
     if let Err(_e) = writeln!(map_file, "{}", updated_map) {
         eprintln!("An error occoured");
-        append_log(unsafe { &PROGNAME }, "Could save map data to file");
+        let _ = append_log(unsafe { &PROGNAME }, "Could save map data to file");
     };
 
     return true;
@@ -236,7 +227,7 @@ pub fn update_map(map_num: u32) -> bool {
 
 #[test]
 fn ping_check() {
-    let result = ping(unsafe { PROGNAME }, "dummy".to_string());
+    let result = ping(unsafe { PROGNAME.to_owned() }, "dummy".to_string());
     assert_eq!(result, false);
 }
 

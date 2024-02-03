@@ -1,13 +1,11 @@
 use hex::encode;
 use logging::append_log;
-use pretty::halt;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
     io::{prelude::*, SeekFrom, Write},
     path::Path,
-    process::exit,
 };
 use system::{
     create_hash, del_dir, del_file,
@@ -27,7 +25,7 @@ use crate::{
         RecsWarningType,
     },
     local_env::{calc_buffer, DATA, META, VERSION},
-    DEBUGGING, PROGNAME,
+    PROGNAME,
 };
 
 // ! This is the struct for all secrets CHANGE WITH CARE
@@ -83,7 +81,10 @@ pub fn write(
     };
 
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
-    append_log(unsafe { &PROGNAME }, &msg);
+    match append_log(unsafe { &PROGNAME }, &msg) {
+        Ok(_) => (),
+        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+    };
 
     // testing if the file exists
     let filename_existence: bool = is_path(&filename);
@@ -101,7 +102,7 @@ pub fn write(
         let num = range.sample(&mut rng);
 
         // creating the rest of the struct data
-        let unique_id: String = truncate(&encode(create_hash(&filename)), 20).to_string();
+        let unique_id: String = truncate(&encode(create_hash(filename.clone())), 20).to_string();
         let canon_path: String = match canonicalize(&filename) {
             Ok(d) => d.display().to_string(),
             Err(e) => {
@@ -118,7 +119,7 @@ pub fn write(
         // Determining chunk amount and size
         let chunk_count: usize = file_size as usize / buffer_size;
         // make a hash
-        let full_file_hash: String = create_hash(&filename);
+        let full_file_hash: String = create_hash(filename.clone());
 
         // Creating the struct
         let secret_data_struct: SecretDataIndex = SecretDataIndex {
@@ -144,7 +145,14 @@ pub fn write(
                 )))
             }
         };
-        let cipher_data_map = match encrypt(pretty_data_map, fetch_chunk_helper(1), 1024) {
+        let cipher_data_map = match encrypt(
+            pretty_data_map,
+            match fetch_chunk_helper(1) {
+                Ok(d) => d,
+                Err(e) => return Err(e),
+            },
+            1024,
+        ) {
             // ! system files like keys and maps are set to 1024 for buffer to make reading simple
             Ok(d) => d,
             Err(e) => return Err(e),
@@ -152,7 +160,7 @@ pub fn write(
 
         // this reads the entire file into a buffer
         // TODO Stream this data with the buffer functions we have already
-        let mut file = match File::open(filename) {
+        let mut file = match File::open(&filename) {
             Ok(f) => f,
             Err(e) => {
                 return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -179,7 +187,7 @@ pub fn write(
         match secret_file {
             Ok(_) => (),
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                append_log(
+                let _ = append_log(
                     unsafe { &PROGNAME },
                     &format!("The file already exists {}", &secret_path),
                 );
@@ -219,7 +227,7 @@ pub fn write(
                         "{}-{}-{}-{}",
                         padding_count(signature_count), // Fix for single digit signature count
                         VERSION,
-                        truncate(&create_hash(&encoded_buffer), 20),
+                        truncate(&create_hash(encoded_buffer.clone()), 20),
                         signature_count
                     );
 
@@ -228,7 +236,10 @@ pub fn write(
                     // * Running the actual encryption
                     let secret_buffer = match encrypt(
                         encoded_buffer.as_bytes().to_vec(),
-                        match create_writing_key(fetch_chunk_helper(num).to_string()) {
+                        match create_writing_key(match fetch_chunk_helper(num) {
+                            Ok(d) => d,
+                            Err(e) => return Err(e),
+                        }) {
                             // TODO ^ Simplyfy this. It is I/o intensive needed multiple files calls multiple times a second
                             Ok(d) => d,
                             Err(e) => return Err(e),
@@ -303,7 +314,10 @@ pub fn write(
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             },
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                del_dir(&secret_path);
+                match del_dir(&secret_path) {
+                    Ok(_) => (),
+                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                };
                 match append_log( &unsafe { &PROGNAME }, "The json associated with this file id already exists. Nothing has been deleted.") {
                     Ok(_) => (),
                     Err(e) => return Err(RecsRecivedErrors::repack(e)),
@@ -349,13 +363,16 @@ pub fn write(
             }
         }
         // resolving the key data
-        let key_data: String = match create_writing_key(fetch_chunk_helper(num).to_string()) {
+        let key_data: String = match create_writing_key(match fetch_chunk_helper(num) {
+            Ok(d) => d,
+            Err(e) => return Err(e),
+        }) {
             Ok(d) => d,
             Err(e) => return Err(e),
         };
         return Ok((key_data, chunk_count));
     } else {
-        append_log(
+        let _ = append_log(
             unsafe { &PROGNAME },
             &format!("Warning {} doesn't exist", &filename),
         );
@@ -379,13 +396,21 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                 SystemErrorType::ErrorOpeningFile,
-                &format!("Couldn't create the temp file"),
+                &format!("Couldn't create the temp file: {}", e),
             )))
         }
     };
 
     // writing when made
-    dummy_file.write_all(&data);
+    match dummy_file.write_all(&data) {
+        Ok(_) => (),
+        Err(e) => {
+            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                SystemErrorType::ErrorOpeningFile,
+                &e.to_string(),
+            )))
+        }
+    };
 
     // encrypting the dummy file
     let results: Result<(String, usize), RecsRecivedErrors> = write(
@@ -411,7 +436,12 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
                     )))
                 }
             };
-            let secret_map_data = match decrypt(&cipher_map_data, &fetch_chunk_helper(1)) {
+            let key_data: String = match fetch_chunk_helper(1) {
+                Ok(d) => d,
+                Err(e) => return Err(e),
+            };
+
+            let secret_map_data = match decrypt(&cipher_map_data, &key_data) {
                 Ok(d) => d,
                 Err(e) => return Err(e),
             };
@@ -422,8 +452,8 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
                         return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
                             RecsErrorType::JsonReadingError,
                             &format!(
-                                "Json data decrypted in write function was garbage: {:?}",
-                                &secret_map_data
+                                "Json data decrypted in write function was garbage: {:?}, {}",
+                                &secret_map_data, e
                             ),
                         )))
                     }
@@ -431,7 +461,7 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
             // pulling info from the map
             // ensure the data is there
             if !is_path(&secret_map.secret_path) {
-                append_log(
+                let _ = append_log(
                     unsafe { &PROGNAME },
                     "THE DATA FILE SPECIFIED DOES NOT EXIST",
                 );
@@ -451,7 +481,10 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
                 }
             };
 
-            forget(dummy_owner.to_owned(), dummy_name.to_owned());
+            match forget(dummy_owner.to_owned(), dummy_name.to_owned()){
+                Ok(_) => (),
+                Err(e) => return Err(e),
+            };
 
             return Ok((key, recs_data, count));
         }
@@ -463,7 +496,7 @@ pub fn read_raw(
     data: String,
     key: String,
     chunks: usize,
-) -> Result<(Option<RecsRecivedWarnings>, Vec<u8>), RecsRecivedErrors> {
+) -> Result<(Vec<Option<RecsRecivedWarnings>>, Vec<u8>), RecsRecivedErrors> {
     // Recreating the cipher chunk size
     let secret_size: usize = data.chars().count();
     let secret_divisor: usize = chunks;
@@ -504,26 +537,32 @@ pub fn read_raw(
             let cipher_buffer: &str = &secret_buffer[62..]; // * this is the encrypted hex encoded bytes
 
             // * decrypting the chunk
-            encoded_buffer.append(match decrypt(&cipher_buffer, &key) {
-                Ok(d) => &mut d.clone(), // TODO find a more efficient way to do this
+            let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &key) {
+                Ok(d) => d, // TODO find a more efficient way to do this
                 Err(e) => return Err(e),
-            });
+            };
+
+            encoded_buffer.append(&mut decrypted_data);
 
             // * handeling decoding the signature
             // ? This mess decodes the vec array into a hex encoded string, then reads that into a normal &string
-            signature += match String::from_utf8(match hex::decode(encoded_signature) {
+
+            let signature_utf8: Result<String, std::string::FromUtf8Error> =
+                String::from_utf8(match hex::decode(encoded_signature) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                            RecsErrorType::InvalidHexData,
+                            &format!(
+                                "An error occoured while reading signature {}",
+                                &e.to_string()
+                            ),
+                        )))
+                    }
+                });
+
+            let signature_data: String = match signature_utf8 {
                 Ok(d) => d,
-                Err(e) => {
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                        RecsErrorType::InvalidHexData,
-                        &format!(
-                            "An error occoured while reading signature {}",
-                            &e.to_string()
-                        ),
-                    )))
-                }
-            }) {
-                Ok(d) => &d,
                 Err(e) => {
                     return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
                         RecsErrorType::InvalidUtf8Data,
@@ -535,13 +574,15 @@ pub fn read_raw(
                 }
             };
 
+            signature += &signature_data;
+
             // ! After 9 chuncks an HMAC error is thrown because the sig size is not updated
             // ! ^ This should be remedied
             // !? Verify the signature integrity
             match verify_signature(&encoded_buffer, signature.as_str(), signature_count) {
                 Ok(w) => {
                     // * This is where the decoded bytes are retrived
-                    let mut plain_result: Vec<u8> = match hex::decode(encoded_buffer) {
+                    let mut plain_result: Vec<u8> = match hex::decode(encoded_buffer.clone()) {
                         Ok(d) => d,
                         Err(e) => {
                             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
@@ -574,18 +615,24 @@ pub fn read_raw(
 pub fn read(
     secret_owner: String,
     secret_name: String,
-) -> Result<Option<RecsRecivedWarnings>, RecsRecivedErrors> {
+) -> Result<Vec<Option<RecsRecivedWarnings>>, RecsRecivedErrors> {
     // creating the secret json path
-    append_log(unsafe { &PROGNAME }, "Decrypting request");
+    match append_log(unsafe { &PROGNAME }, "Decrypting request") {
+        Ok(_) => (),
+        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+    };
     let secret_map_path = format!("{}/{}-{}.meta", *META, secret_owner, secret_name);
 
     let secret_json_existence: bool = Path::new(&secret_map_path).exists();
     if secret_json_existence {
-        let cipher_map_data = read_to_string(secret_map_path).expect("Couldn't read the map file");
-        let secret_map_data = match decrypt(&cipher_map_data, match fetch_chunk_helper(1){
-            Ok(d) => &d,
+        let cipher_map_data: String =
+            read_to_string(secret_map_path).expect("Couldn't read the map file");
+        let key_data: String = match fetch_chunk_helper(1) {
+            Ok(d) => d,
             Err(e) => return Err(e),
-        }) {
+        };
+
+        let secret_map_data = match decrypt(&cipher_map_data, &key_data) {
             Ok(d) => d,
             Err(e) => return Err(e),
         };
@@ -599,13 +646,13 @@ pub fn read(
             }
         };
 
-        let mut warnings: Option<RecsRecivedWarnings> = None;
+        let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![None];
 
         // ! Validating that we can mess with this data
-        warnings = match secret_map.version == VERSION {
+        warnings.push(match secret_map.version == VERSION {
             true => None,
             false => {
-                append_log(
+                let _ = append_log(
                     unsafe { &PROGNAME },
                     "Data from and older version of recs attempting to read anyway",
                 );
@@ -613,7 +660,7 @@ pub fn read(
                     RecsWarningType::OutdatedVersion,
                 )))
             }
-        };
+        });
 
         // ensure the data is there
         match is_path(&secret_map.secret_path) {
@@ -627,7 +674,7 @@ pub fn read(
 
         // generating the secret key for the file
         let writting_key: String =
-            match create_writing_key(match fetch_chunk_helper(secret_map.key){
+            match create_writing_key(match fetch_chunk_helper(secret_map.key) {
                 Ok(d) => d,
                 Err(e) => return Err(e),
             }) {
@@ -673,7 +720,10 @@ pub fn read(
         // * checking if its safe to make the file
         let is_file: bool = is_path(&secret_map.file_path);
         if is_file == true {
-            append_log(unsafe { &PROGNAME }, "The file requested already exists");
+            match append_log(unsafe { &PROGNAME }, "The file requested already exists"){
+                Ok(_) => (),
+                Err(e) => return Err(RecsRecivedErrors::repack(e)),
+            };
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::Error,
             )));
@@ -718,22 +768,30 @@ pub fn read(
                     let cipher_buffer: &str = &secret_buffer[62..];
 
                     // * decrypting the chunk
-                    encoded_buffer.append(match decrypt(&cipher_buffer, &writting_key) {
-                        Ok(d) => &mut d.clone(),
+                    let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &writting_key) {
+                        Ok(d) => d,
                         Err(e) => return Err(e),
-                    });
+                    };
+
+                    encoded_buffer.append(&mut decrypted_data);
 
                     // * handeling decoding the signature
-                    signature += match String::from_utf8(match hex::decode(encoded_signature) {
+                    let signature_utf8: Result<String, std::string::FromUtf8Error> =
+                        String::from_utf8(match hex::decode(encoded_signature) {
+                            Ok(d) => d,
+                            Err(e) => {
+                                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                                    RecsErrorType::InvalidHexData,
+                                    &format!(
+                                        "An error occoured while reading signature {}",
+                                        &e.to_string()
+                                    ),
+                                )))
+                            }
+                        });
+
+                    let signature_data: String = match signature_utf8 {
                         Ok(d) => d,
-                        Err(e) => {
-                            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                                RecsErrorType::InvalidHexData,
-                                &e.to_string(),
-                            )))
-                        }
-                    }) {
-                        Ok(d) => &d,
                         Err(e) => {
                             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
                                 RecsErrorType::InvalidUtf8Data,
@@ -744,12 +802,17 @@ pub fn read(
                             )))
                         }
                     };
+
+                    signature += &signature_data
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     break;
                 }
                 Err(e) => {
-                    append_log(unsafe { &PROGNAME }, &e.to_string());
+                    match append_log(unsafe { &PROGNAME }, &e.to_string()) {
+                        Ok(_) => (),
+                        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+                    };
                     return Err(RecsRecivedErrors::RecsError(RecsError::new(
                         RecsErrorType::Error,
                     )));
@@ -761,10 +824,10 @@ pub fn read(
             // !? Verify the signature integrity
             // let _sig_digit_count = truncate(&signature, 1);
             match verify_signature(&encoded_buffer, signature.as_str(), signature_count) {
-                Ok(w) => {
+                Ok(mut w) => {
                     // ? unencoding buffer
                     // * This is where the decoded bytes are retrived
-                    let mut plain_result: Vec<u8> = match hex::decode(encoded_buffer) {
+                    let plain_result: Vec<u8> = match hex::decode(encoded_buffer.clone()) {
                         Ok(d) => d,
                         Err(e) => {
                             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
@@ -792,14 +855,14 @@ pub fn read(
                     encoded_buffer.clear();
                     signature = "".to_string();
                     // ? appending any warning
-                    warnings = w
+                    warnings.append(&mut w)
                 }
                 Err(e) => return Err(e),
             }
         }
-        return Ok(None);
+        return Ok(vec![None]); // return ok val with no warnings
     } else {
-        append_log(unsafe { &PROGNAME }, "The secret map doen't exist");
+        let _ = append_log(unsafe { &PROGNAME }, "The secret map doen't exist");
         return Err(RecsRecivedErrors::RecsError(RecsError::new(
             RecsErrorType::InvalidMapData,
         )));
@@ -808,7 +871,7 @@ pub fn read(
 
 pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsRecivedErrors> {
     // creating the secret json file
-    append_log(unsafe { &PROGNAME }, "Forgetting secret");
+    let _ = append_log(unsafe { &PROGNAME }, "Forgetting secret");
     let secret_map_path = format!("{}/{}-{}.meta", *META, secret_owner, secret_name);
 
     // testing if the secret json exists before starting encryption
@@ -823,10 +886,12 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
             }
         };
 
-        let secret_map_data = match decrypt(&cipher_map_data, match fetch_chunk_helper(1){
-            Ok(d) => &d,
+        let key_data: String = match fetch_chunk_helper(1) {
+            Ok(d) => d,
             Err(e) => return Err(e),
-        }) {
+        };
+
+        let secret_map_data = match decrypt(&cipher_map_data, &key_data) {
             Ok(d) => d,
             Err(e) => return Err(e),
         };
@@ -842,23 +907,41 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
 
         // the config
         if LEAVE_IN_PEACE {
-            read(secret_owner, secret_name);
+            match read(secret_owner, secret_name){
+                Ok(_) => (),
+                Err(e) => return Err(e),
+            };
 
             // deleted secret data
             if is_path(&secret_map.secret_path) {
-                del_file(&secret_map.secret_path);
+                match del_file(&secret_map.secret_path) {
+                    Ok(_) => (),
+                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                };
             }
-            del_file(&secret_map_path);
+            match del_file(&secret_map_path) {
+                Ok(_) => (),
+                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+            };
         } else {
             // deleted secret data
             if is_path(&secret_map.secret_path) {
-                del_file(&secret_map.secret_path);
+                match del_file(&secret_map.secret_path){
+                    Ok(_) => (),
+                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                };
             }
-            del_file(&secret_map_path);
+            match del_file(&secret_map_path) {
+                Ok(_) => (),
+                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+            };
         }
         return Ok(());
     } else {
-        append_log(unsafe { &PROGNAME }, "The file requested doesn't exist");
+        match append_log(unsafe { &PROGNAME }, "The file requested doesn't exist"){
+            Ok(_) => (),
+            Err(e) => return Err(RecsRecivedErrors::repack(e)),
+        };
         return Err(RecsRecivedErrors::RecsError(RecsError::new(
             RecsErrorType::Error,
         )));
@@ -877,52 +960,53 @@ fn verify_signature(
     encoded_buffer: &Vec<u8>,
     signature: &str,
     signature_count: usize,
-) -> Result<Option<RecsRecivedWarnings>, RecsRecivedErrors> {
+) -> Result<Vec<Option<RecsRecivedWarnings>>, RecsRecivedErrors> {
     let _sig_digit_count = truncate(&signature, 1); // remember it exists
 
     let sig_version = truncate(&signature[2..], 6);
 
     // Defining one variable that will hold the last warning if any
-    let mut warnings: Option<RecsRecivedWarnings> = None;
+    let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![];
 
-    warnings = match sig_version == VERSION {
+    warnings.push( match sig_version == VERSION {
         true => None,
         false => {
-            append_log(unsafe { &PROGNAME }, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
+            let _ = append_log(unsafe { &PROGNAME }, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
             Some(RecsRecivedWarnings::RecsWarning(RecsWarning::new(
                 RecsWarningType::OutdatedVersion,
             )))
         }
+    });
+
+    let new_hash_data: String = match String::from_utf8(encoded_buffer.to_vec()) {
+        Ok(d) => d,
+        Err(e) => {
+            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                RecsErrorType::InvalidTypeGiven,
+                &e.to_string(),
+            )))
+        }
     };
-
     // pulling the hash from the signature
-    let sig_hash: &str = truncate(&signature[9..], 20);
-    let new_hash: &str = truncate(
-        &create_hash(match &String::from_utf8(encoded_buffer.to_vec()) {
-            Ok(d) => d,
-            Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::InvalidTypeGiven,
-                    &e.to_string(),
-                )))
-            }
-        }),
-        20,
-    );
+    let sig_hash: String = truncate(&signature[9..], 20).to_owned();
+    let new_hash: String = truncate(&create_hash(new_hash_data.clone()), 20).to_owned();
 
-    warnings = match sig_hash == new_hash {
+    warnings.push(match sig_hash == new_hash {
         true => None,
         false => {
-            append_log(unsafe { &PROGNAME }, "A chunk had an invalid has signature");
-            append_log(
+            let _ = append_log(unsafe { &PROGNAME }, "A chunk had an invalid has signature");
+            match append_log(
                 unsafe { &PROGNAME },
                 "an option will be in a cli tool to ignore checks in an emergency",
-            );
+            ) {
+                Ok(_) => (),
+                Err(e) => return Err(RecsRecivedErrors::repack(e)),
+            };
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::InvalidSignature,
             )));
         }
-    };
+    });
 
     let sig_count = match signature[30..].parse::<usize>() {
         Ok(d) => d,
@@ -934,12 +1018,12 @@ fn verify_signature(
         }
     };
 
-    warnings = match sig_count == signature_count {
+    warnings.push(match sig_count == signature_count {
         true => None,
         false => Some(RecsRecivedWarnings::RecsWarning(RecsWarning::new(
             RecsWarningType::MisAlignedChunk,
         ))),
-    };
+    });
 
     return Ok(warnings);
 }

@@ -1,11 +1,11 @@
-use logging::append_log;
+use logging::{append_log, errors::MyErrors};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
     io::{prelude::*, SeekFrom, Write},
     str,
 };
-use system::{del_dir, del_file, errors::SystemError, is_path, create_hash};
+use system::{create_hash, del_dir, del_file, errors::SystemError, is_path};
 
 use crate::{
     config::{ARRAY_LEN, CHUNK_SIZE},
@@ -37,20 +37,14 @@ pub fn array_arimitics() -> u32 {
     return total_chunks;
 }
 
-pub fn generate_system_array(debug: bool) -> Result<bool, RecsRecivedErrors> {
-    append_log(unsafe { &PROGNAME }, "Creating system array");
+pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
+    match append_log(unsafe { &PROGNAME }, "Creating system array") {
+        Ok(_) => (),
+        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+    };
 
     // Remove the existing system array directory
-    match del_dir(&SYSTEM_ARRAY_LOCATION) {
-        Ok(_) => match debug {
-            true => append_log(
-                unsafe { &PROGNAME },
-                &format!("{:?} Deleted", &SYSTEM_ARRAY_LOCATION),
-            ),
-            false => Ok(()),
-        },
-        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-    };
+    let _ = del_dir(&SYSTEM_ARRAY_LOCATION);
 
     // Create the system array contents
     let system_array_contents = create_system_array_contents();
@@ -58,14 +52,20 @@ pub fn generate_system_array(debug: bool) -> Result<bool, RecsRecivedErrors> {
     // Write the system array contents to the file
     match write_system_array_to_file(&system_array_contents) {
         true => {
-            append_log(unsafe { &PROGNAME }, "Created system array");
+            match append_log(unsafe { &PROGNAME }, "Created system array") {
+                Ok(_) => (),
+                Err(e) => return Err(RecsRecivedErrors::repack(e)),
+            };
             return Ok(true);
         }
         false => {
-            append_log(
+            match append_log(
                 unsafe { &PROGNAME },
                 "Could not write the system_array to the path specified",
-            );
+            ) {
+                Ok(_) => (),
+                Err(e) => return Err(RecsRecivedErrors::repack(e)),
+            };
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
                 RecsErrorType::InitializationError,
                 "Could not write the system_array to the path specified",
@@ -150,7 +150,7 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
         match file.read_exact(&mut buffer) {
             Ok(_) => {
                 chunk = buffer.iter().map(|data| format!("{:02X}", data)).collect();
-                let chunk_hash = create_hash(&chunk);
+                let chunk_hash = create_hash(chunk);
 
                 let chunk_map = ChunkMap {
                     location: SYSTEM_ARRAY_LOCATION.to_string(),
@@ -164,7 +164,10 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                 let chunk_map_path = format!("{}/chunk_{}.map", *MAPS, chunk_number);
 
                 if is_path(&chunk_map_path) {
-                    del_file(&chunk_map_path);
+                    match del_file(&chunk_map_path) {
+                        Ok(_) => (),
+                        Err(e) => return Err(RecsRecivedErrors::repack(MyErrors::SystemError(e))),
+                    };
                 }
 
                 let pretty_chunk_map = match serde_json::to_string_pretty(&chunk_map) {
@@ -193,10 +196,20 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                 };
 
                 match write!(chunk_map_file, "{}", pretty_chunk_map) {
-                    Ok(_) => append_log(unsafe { &PROGNAME }, &format!("The map file {} has been created", &chunk_map_path)),
-                    Err(e) => return Err(RecsRecivedErrors::SystemError(SystemError::new_details(system::errors::SystemErrorType::ErrorOpeningFile, &e.to_string()))),
+                    Ok(_) => match append_log(
+                        unsafe { &PROGNAME },
+                        &format!("The map file {} has been created", &chunk_map_path),
+                    ) {
+                        Ok(_) => (),
+                        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+                    },
+                    Err(e) => {
+                        return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                            system::errors::SystemErrorType::ErrorOpeningFile,
+                            &e.to_string(),
+                        )))
+                    }
                 };
-
             }
             Err(_) => break,
         }
@@ -207,7 +220,10 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
         range_end += CHUNK_SIZE as u32;
     }
 
-    append_log(unsafe { &PROGNAME }, "Indexed system array !");
+    match append_log(unsafe { &PROGNAME }, "Indexed system array !") {
+        Ok(_) => (),
+        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+    };
     Ok(true)
 }
 

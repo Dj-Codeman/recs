@@ -19,8 +19,8 @@ pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
 lazy_static! {
     // Default rescs directory
     #[derive(Debug)]
-    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("/usr/recs/{}/array.recs", create_hash(&unsafe { PROGNAME }.to_string()));
-    pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(&unsafe { PROGNAME }.to_string()));
+    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("/usr/recs/{}/array.recs", create_hash(unsafe { PROGNAME.to_owned() }));
+    pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(unsafe { PROGNAME.to_owned() }));
     // Paths for important things
     pub static ref ARRAY_PATH: String = format!("/usr/recs");
     pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.clone());
@@ -37,16 +37,14 @@ pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
         Err(e) => return Err(e),
     };
 
-    match generate_system_array(debug) {
+    match generate_system_array() {
         Ok(_) => {
-            match index_system_array() {
-                Ok(_) => match debug {
-                    true => append_log(
-                        unsafe { &PROGNAME },
-                        "System array has been created and indexed",
-                    ),
-                    false => Ok(()),
-                },
+            let _ = match index_system_array() {
+                Ok(_) => append_log(
+                    unsafe { &PROGNAME },
+                    "System array has been created and indexed",
+                ),
+
                 Err(e) => return Err(e),
             };
         }
@@ -74,7 +72,7 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
             paths.insert(2, ARRAY_PATH.clone());
 
             for path in paths.iter() {
-                match remake_dir(path) {
+                let _ = match remake_dir(path) {
                     Ok(_) => match debug {
                         true => {
                             append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path))

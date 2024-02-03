@@ -18,11 +18,11 @@ impl RecsRecivedErrors {
     // to be displayed and handeled by recs
     pub fn repack(errors: MyErrors) -> RecsRecivedErrors {
         match errors {
-            MyErrors::LoggerError(LoggerError) => {
-                return RecsRecivedErrors::LoggerError(LoggerError)
+            MyErrors::LoggerError(logger_error) => {
+                return RecsRecivedErrors::LoggerError(logger_error)
             }
-            MyErrors::SystemError(SystemError) => {
-                return RecsRecivedErrors::SystemError(SystemError)
+            MyErrors::SystemError(system_error) => {
+                return RecsRecivedErrors::SystemError(system_error)
             }
         }
     }
@@ -75,9 +75,9 @@ impl RecsRecivedErrors {
     }
 }
 
-pub fn error_display(warn: bool, error: MyErrors) {
-    // Handeles all types of custom errors passed to it. They will display to the sdin I think
-}
+// pub fn error_display(warn: bool, error: MyErrors) {
+//     // Handeles all types of custom errors passed to it. They will display to the sdin I think
+// }
 
 #[derive(Debug)]
 pub struct RecsError {
