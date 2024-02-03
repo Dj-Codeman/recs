@@ -3,15 +3,17 @@ use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
 use logging::append_log;
-use pretty::notice;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
-use std::{fmt::format, str};
+use std::str;
 use substring::Substring;
 use system::truncate;
 
 use crate::{
-    array_tools::fetch_chunk, config::ARRAY_LEN, errors::{RecsError, RecsErrorType, RecsRecivedErrors}, PROGNAME
+    array_tools::fetch_chunk,
+    config::ARRAY_LEN,
+    errors::{RecsError, RecsErrorType, RecsRecivedErrors},
+    PROGNAME,
 };
 
 pub type Aes256Cbc = Cbc<Aes256, Pkcs7>;
@@ -50,17 +52,14 @@ pub fn encrypt(
     })?;
 
     let cipher = Aes256Cbc::new_from_slices(&key, iv.as_bytes()).map_err(|e| {
-        RecsRecivedErrors::RecsError(RecsError::new_details(
-            RecsErrorType::Error,
-            &e.to_string(),
-        ))
+        RecsRecivedErrors::RecsError(RecsError::new_details(RecsErrorType::Error, &e.to_string()))
     })?;
 
     let pad_len = data.len();
     let mut buffer: Vec<u8> = if pad_len > buffer_size {
-        vec![0; buffer_size+pad_len * 2]
+        vec![0; buffer_size + pad_len * 2]
     } else {
-        vec![0; buffer_size+pad_len]
+        vec![0; buffer_size + pad_len]
     };
 
     buffer[..pad_len].copy_from_slice(&data);
@@ -75,7 +74,6 @@ pub fn encrypt(
         }
     });
 
-
     let mut cipherdata = String::new();
 
     cipherdata.push_str(&ciphertext);
@@ -83,13 +81,15 @@ pub fn encrypt(
 
     // creating hmac
     let hmac = create_hmac(&cipherdata)?;
-    notice(&format!("{},{},{}", &ciphertext, &iv, &hmac));
+    // notice(&format!("{},{},{}", &ciphertext, &iv, &hmac));
 
     cipherdata.push_str(&hmac);
 
     if cipherdata.len() == 0 {
         let _ = append_log(unsafe { PROGNAME }, "NO CIPHER DATA RECIVED");
-        return Err(RecsRecivedErrors::RecsError(RecsError::new(RecsErrorType::Error)));
+        return Err(RecsRecivedErrors::RecsError(RecsError::new(
+            RecsErrorType::Error,
+        )));
     }
 
     Ok(cipherdata)

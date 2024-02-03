@@ -1,6 +1,6 @@
 use hex::encode;
 use logging::append_log;
-use pretty::notice;
+use pretty::{notice, warn};
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -238,9 +238,11 @@ pub fn write(
                         truncate(&create_hash(encoded_buffer.clone()), 20),
                         signature_count
                     );
+                    warn(&sig_data);
 
                     // hexing all the data for handeling
                     let signature: String = hex::encode(sig_data);
+                    warn(&signature);
                     // * Running the actual encryption
                     let secret_buffer = match encrypt(
                         encoded_buffer.as_bytes().to_vec(),
@@ -257,6 +259,7 @@ pub fn write(
                         Ok(d) => d,
                         Err(e) => return Err(e),
                     };
+                    warn(&secret_buffer);
 
                     // this is the one var thatll be pushed to file
                     let mut processed_chunk: String = String::new();
@@ -266,24 +269,44 @@ pub fn write(
 
                     notice(&processed_chunk);
 
-                    match write!(
-                        match secret_file.as_mut() {
-                            Ok(d) => d,
-                            Err(e) =>
-                                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                                    RecsErrorType::Error,
-                                    &e.to_string()
-                                ))),
-                        },
-                        "{}",
-                        processed_chunk
-                    ) {
-                        Ok(_) => (),
-                        Err(e) => {
-                            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                                RecsErrorType::Error,
-                                &e.to_string(),
-                            )))
+                    let result: Result<(), RecsRecivedErrors> = match secret_file.as_mut() {
+                        Ok(file) => write!(file, "{}", processed_chunk).map_err(|_| {
+                            RecsRecivedErrors::SystemError(SystemError::new(
+                                SystemErrorType::ErrorOpeningFile,
+                            ))
+                        }),
+                        Err(e) => Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                            RecsErrorType::Error,
+                            &e.to_string(),
+                        ))),
+                    };
+
+                    if let Err(e) = result {
+                        match e {
+                            RecsRecivedErrors::LoggerError(ed) => {
+                                let _ = append_log(
+                                    unsafe { PROGNAME },
+                                    &format!("UNUSED: an error occoured while logging: {:?}", ed),
+                                );
+                                return Err(RecsRecivedErrors::LoggerError(ed))
+                            }
+                            RecsRecivedErrors::SystemError(ed) => {
+                                let _ = append_log(
+                                    unsafe { PROGNAME },
+                                    &format!(
+                                        "A system error has occoured while writing to file: {:?}",
+                                        ed
+                                    ),
+                                );
+                                return Err(RecsRecivedErrors::SystemError(ed))
+                            }
+                            RecsRecivedErrors::RecsError(ed) => {
+                                let _ = append_log(
+                                    unsafe { PROGNAME },
+                                    &format!("RECS ERROR: {:?}", ed),
+                                );
+                                return Err(RecsRecivedErrors::RecsError(ed))
+                            }
                         }
                     };
 
