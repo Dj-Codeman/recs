@@ -5,7 +5,7 @@ use hmac::{Hmac, Mac};
 use pretty::notice;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
-use std::str;
+use std::{error::Error, str};
 use substring::Substring;
 use system::truncate;
 
@@ -66,15 +66,16 @@ pub fn encrypt(
 
     buffer[..pad_len].copy_from_slice(&data);
 
-    let ciphertext = encode(match cipher.encrypt(&mut buffer, pad_len) {
-        Ok(d) => d,
-        Err(e) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InvalidBlockData,
-                &e.to_string(),
-            )))
-        }
-    });
+    let ciphertext = encode(cipher.encrypt(&mut buffer, pad_len).unwrap());
+    // let ciphertext = encode(match cipher.encrypt(&mut buffer, pad_len) {
+    //     Ok(d) => d,
+    //     Err(e) => {
+    //         return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+    //             RecsErrorType::InvalidBlockData,
+    //             &e.description(),
+    //         )))
+    //     }
+    // });
 
     notice(&ciphertext);
 
