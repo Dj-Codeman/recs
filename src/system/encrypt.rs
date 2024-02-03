@@ -82,7 +82,7 @@ pub fn encrypt(
 
     // creating hmac
     let hmac = create_hmac(&cipherdata)?;
-    // notice(&format!("{},{},{}", &ciphertext, &iv, &hmac));
+    warn(&hmac);
 
     cipherdata.push_str(&hmac);
 
