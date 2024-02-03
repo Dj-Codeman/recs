@@ -58,11 +58,12 @@ pub fn encrypt(
     })?;
 
     let pad_len = data.len();
-    let mut buffer: Vec<u8> = if pad_len > buffer_size {
-        vec![0; buffer_size * 2]
-    } else {
-        vec![0; buffer_size]
-    };
+    // let mut buffer: Vec<u8> = if pad_len > buffer_size {
+    //     vec![0; buffer_size * 2]
+    // } else {
+    //     vec![0; buffer_size]
+    // };
+    let mut buffer: Vec<u8> = vec![0; pad_len];
 
     buffer[..pad_len].copy_from_slice(&data);
 
