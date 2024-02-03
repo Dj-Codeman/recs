@@ -2,17 +2,16 @@ use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
+use logging::append_log;
 use pretty::notice;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
-use std::str;
+use std::{fmt::format, str};
 use substring::Substring;
 use system::truncate;
 
 use crate::{
-    array_tools::fetch_chunk,
-    config::ARRAY_LEN,
-    errors::{RecsError, RecsErrorType, RecsRecivedErrors},
+    array_tools::fetch_chunk, config::ARRAY_LEN, errors::{RecsError, RecsErrorType, RecsRecivedErrors}, PROGNAME
 };
 
 pub type Aes256Cbc = Cbc<Aes256, Pkcs7>;
@@ -76,6 +75,7 @@ pub fn encrypt(
         }
     });
 
+
     let mut cipherdata = String::new();
 
     cipherdata.push_str(&ciphertext);
@@ -83,8 +83,14 @@ pub fn encrypt(
 
     // creating hmac
     let hmac = create_hmac(&cipherdata)?;
+    notice(&format!("{},{},{}", &ciphertext, &iv, &hmac));
 
     cipherdata.push_str(&hmac);
+
+    if cipherdata.len() == 0 {
+        let _ = append_log(unsafe { PROGNAME }, "NO CIPHER DATA RECIVED");
+        return Err(RecsRecivedErrors::RecsError(RecsError::new(RecsErrorType::Error)));
+    }
 
     Ok(cipherdata)
 }
