@@ -19,9 +19,9 @@ pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
 lazy_static! {
     // Default rescs directory
     #[derive(Debug)]
-    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("/usr/recs/{}/array.recs", create_hash(unsafe { PROGNAME.to_owned() }));
     pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(unsafe { PROGNAME.to_owned() }));
     // Paths for important things
+    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("{}/array.recs", SYSTEM_PATH.to_owned());
     pub static ref ARRAY_PATH: String = format!("/usr/recs");
     pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.clone());
     pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.clone());
