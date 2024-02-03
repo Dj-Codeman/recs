@@ -1013,6 +1013,7 @@ fn verify_signature(
     let _sig_digit_count = truncate(&signature, 1); // remember it exists
 
     let sig_version = truncate(&signature[3..], 7);
+    notice(&sig_version);
 
     // Defining one variable that will hold the last warning if any
     let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![];

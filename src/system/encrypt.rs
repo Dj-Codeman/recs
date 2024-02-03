@@ -3,7 +3,7 @@ use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
 use logging::append_log;
-use pretty::{dump, notice, output, warn};
+use pretty::dump;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
 use std::str;
