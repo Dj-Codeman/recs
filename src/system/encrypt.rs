@@ -52,7 +52,7 @@ pub fn encrypt(
 
     let cipher = Aes256Cbc::new_from_slices(&key, iv.as_bytes()).map_err(|e| {
         RecsRecivedErrors::RecsError(RecsError::new_details(
-            RecsErrorType::InvalidBlockData,
+            RecsErrorType::Error,
             &e.to_string(),
         ))
     })?;
