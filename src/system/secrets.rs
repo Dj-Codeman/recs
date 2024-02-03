@@ -237,7 +237,6 @@ pub fn write(
                         truncate(&create_hash(encoded_buffer.clone()), 20),
                         signature_count
                     );
-                    warn(&sig_data);
 
                     // hexing all the data for handeling
                     let signature: String = hex::encode(sig_data);
