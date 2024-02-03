@@ -1038,7 +1038,7 @@ fn verify_signature(
         }
     };
     // pulling the hash from the signature
-    let sig_hash: String = truncate(&signature[11..], 21).to_owned();
+    let sig_hash: String = truncate(&signature[10..], 19).to_owned();
     notice(&sig_hash);
     let new_hash: String = truncate(&create_hash(new_hash_data.clone()), 20).to_owned();
 
