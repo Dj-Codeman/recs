@@ -1,5 +1,4 @@
 use logging::{append_log, errors::MyErrors};
-use pretty::{notice, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
@@ -83,7 +82,6 @@ fn create_system_array_contents() -> String {
 }
 
 fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
-    notice(&SYSTEM_ARRAY_LOCATION);
     let mut system_array_file = OpenOptions::new()
         .create_new(true)
         .write(true)

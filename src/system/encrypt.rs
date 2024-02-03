@@ -2,6 +2,7 @@ use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex;
 use hmac::{Hmac, Mac};
+use pretty::notice;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
 use std::str;
@@ -61,6 +62,7 @@ pub fn encrypt(
             )))
         }
     });
+    notice(&ciphertext);
 
     let mut cipherdata = String::new();
 
