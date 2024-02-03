@@ -57,7 +57,7 @@ pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             };
             return Ok(true);
-        },
+        }
         Err(e) => {
             match append_log(
                 unsafe { &PROGNAME },
@@ -67,10 +67,8 @@ pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             };
             return Err(e);
-        },
+        }
     }
-
-        
 }
 
 fn create_system_array_contents() -> String {
@@ -91,21 +89,25 @@ fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
         .create_new(true)
         .write(true)
         .append(true)
-        .open(SYSTEM_ARRAY_LOCATION.to_string())
+        .open(SYSTEM_ARRAY_LOCATION.to_owned())
     {
         Ok(mut system_array_file) => match write!(system_array_file, "{}", contents) {
             Ok(_) => return Ok(()),
             Err(e) => {
+                let _ = append_log(unsafe { PROGNAME }, &e.to_string());
                 return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                     system::errors::SystemErrorType::ErrorCreatingFile,
                     &e.to_string(),
-                )))
+                )));
             }
         },
-        Err(e) => return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-            system::errors::SystemErrorType::ErrorCreatingFile,
-            &e.to_string(),
-        ))),
+        Err(e) => {
+            let _ = append_log(unsafe { PROGNAME }, &e.to_string());
+            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                system::errors::SystemErrorType::ErrorCreatingFile,
+                &e.to_string(),
+            )));
+        }
     }
 }
 
