@@ -65,6 +65,8 @@ pub fn write(
     // Of systems with a bigger amounts of ram, Currently I don't actually know if the way this buffer is desinged
     // accomplishes what it's supposed to but as long as it compiles ill take it
 
+    // * The size of the buffer has to be bigger than the file size because it's expanded
+    // * by reading it as bytes
     let fit_buffer: usize = match (file_size * 2).try_into() {
         Ok(d) => d,
         Err(e) => {
@@ -77,7 +79,7 @@ pub fn write(
     let buffer_size: usize = if fit_buffer <= max_buffer_size {
         fit_buffer
     } else {
-        fit_buffer / 4
+        fit_buffer / 2 // TODO make sure this doesnot fail
     };
 
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
@@ -481,7 +483,7 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
                 }
             };
 
-            match forget(dummy_owner.to_owned(), dummy_name.to_owned()){
+            match forget(dummy_owner.to_owned(), dummy_name.to_owned()) {
                 Ok(_) => (),
                 Err(e) => return Err(e),
             };
@@ -685,7 +687,19 @@ pub fn read(
         // Create chunk map from sig
         // ! this has to be modified to account for the second end byte
         let secret_size: usize = match metadata(&secret_map.secret_path) {
-            Ok(d) => d.len() as usize,
+            Ok(d) => {
+                if d.len() as usize == 0 {
+                    let _ = append_log(
+                        unsafe { PROGNAME },
+                        "The secret file has a size of zero, it is corrupted",
+                    );
+                    return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                        RecsErrorType::Error,
+                    )));
+                } else {
+                    d.len() as usize
+                }
+            }
             Err(e) => {
                 return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                     SystemErrorType::ErrorReadingFile,
@@ -720,7 +734,7 @@ pub fn read(
         // * checking if its safe to make the file
         let is_file: bool = is_path(&secret_map.file_path);
         if is_file == true {
-            match append_log(unsafe { &PROGNAME }, "The file requested already exists"){
+            match append_log(unsafe { &PROGNAME }, "The file requested already exists") {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             };
@@ -907,7 +921,7 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
 
         // the config
         if LEAVE_IN_PEACE {
-            match read(secret_owner, secret_name){
+            match read(secret_owner, secret_name) {
                 Ok(_) => (),
                 Err(e) => return Err(e),
             };
@@ -926,7 +940,7 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
         } else {
             // deleted secret data
             if is_path(&secret_map.secret_path) {
-                match del_file(&secret_map.secret_path){
+                match del_file(&secret_map.secret_path) {
                     Ok(_) => (),
                     Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
                 };
@@ -938,7 +952,7 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
         }
         return Ok(());
     } else {
-        match append_log(unsafe { &PROGNAME }, "The file requested doesn't exist"){
+        match append_log(unsafe { &PROGNAME }, "The file requested doesn't exist") {
             Ok(_) => (),
             Err(e) => return Err(RecsRecivedErrors::repack(e)),
         };
