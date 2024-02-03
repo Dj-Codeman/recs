@@ -82,7 +82,6 @@ pub fn encrypt(
 
     // creating hmac
     let hmac = create_hmac(&cipherdata)?;
-    warn(&hmac);
 
     cipherdata.push_str(&hmac);
 
@@ -103,7 +102,6 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
 
     // removed the hmac from the cipher string to generate the new hmac
     let cipherdata_hmacless: &str = truncate(&cipherdata, cipherdata_len);
-    warn(&format!("Data without hmac {}", cipherdata_hmacless));
 
     // getting old and new hmac values
     let old_hmac: String = cipherdata.substring(cipherdata_len, cipherdata_len + 64).to_owned();
@@ -111,8 +109,7 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
         Ok(d) => d,
         Err(e) => return Err(e),
     };
-    warn(&format!("The hmac on file {}", &old_hmac));
-    warn(&format!("New hmac {}", &new_hmac));
+
 
     // verifing hmac
     match old_hmac == new_hmac {
