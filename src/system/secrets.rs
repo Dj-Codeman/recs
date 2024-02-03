@@ -161,7 +161,6 @@ pub fn write(
             Err(e) => return Err(e),
         };
 
-        // this reads the entire file into a buffer
         // TODO Stream this data with the buffer functions we have already
         let mut file = match File::open(&filename) {
             Ok(f) => f,
@@ -314,6 +313,7 @@ pub fn write(
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     // reached end of file
+                    warn("Unexpected end of file");
                     break;
                 }
                 Err(e) => {
