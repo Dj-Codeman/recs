@@ -16,17 +16,10 @@ use system::{
 
 // self and create are user made code
 use crate::{
-    array::array_arimitics,
-    array_tools::fetch_chunk,
-    auth::create_writing_key,
-    config::{LEAVE_IN_PEACE, SOFT_MOVE_FILES},
-    encrypt::{decrypt, encrypt},
-    errors::{
+    array::array_arimitics, array_tools::fetch_chunk, auth::create_writing_key, config::{LEAVE_IN_PEACE, SOFT_MOVE_FILES}, encrypt::{decrypt, encrypt}, errors::{
         RecsError, RecsErrorType, RecsRecivedErrors, RecsRecivedWarnings, RecsWarning,
         RecsWarningType,
-    },
-    local_env::{calc_buffer, DATA, META, VERSION},
-    PROGNAME,
+    }, local_env::{calc_buffer, DATA, META, VERSION}, DEBUGGING, PROGNAME
 };
 
 // ! This is the struct for all secrets CHANGE WITH CARE
@@ -674,8 +667,14 @@ pub fn read(
             }
         };
 
-        notice(&format!("{:?}", secret_map));
-
+        let _ = match unsafe { DEBUGGING } {
+            Some(bug) => match bug {
+                true => append_log(unsafe { PROGNAME }, &format!("{:?}", secret_map)),
+                false => append_log(unsafe { PROGNAME }, &format!("Secret map data recived")),
+            },
+            None => append_log(unsafe { PROGNAME }, &format!("Secret map data recived")),
+        };
+        
         let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![None];
 
         // ! Validating that we can mess with this data
@@ -813,8 +812,9 @@ pub fn read(
                     };
 
                     // take the first spliiting chunk into signature and cipher data
-                    let encoded_signature: &str = truncate(&secret_buffer, 63); // 61 + how ever big the chunk count is
-                    let cipher_buffer: &str = &secret_buffer[63..];
+                    let encoded_signature: &str = truncate(&secret_buffer, 64); // 61 + how ever big the chunk count is
+                    let cipher_buffer: &str = &secret_buffer[64..];
+                    notice(&encoded_signature);
 
                     // * decrypting the chunk
                     let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &writting_key) {
