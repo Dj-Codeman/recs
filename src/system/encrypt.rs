@@ -106,7 +106,7 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
     warn(&format!("Data without hmac {}", cipherdata_hmacless));
 
     // getting old and new hmac values
-    let old_hmac: &str = cipherdata.substring(cipherdata_len, cipherdata_len + 64);
+    let old_hmac: String = cipherdata.substring(cipherdata_len, cipherdata_len + 64).to_owned();
     let new_hmac: String = match create_hmac(cipherdata_hmacless) {
         Ok(d) => d,
         Err(e) => return Err(e),
