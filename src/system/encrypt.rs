@@ -3,7 +3,7 @@ use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
 use logging::append_log;
-use pretty::{dump, output};
+use pretty::{dump, output, warn};
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
 use std::str;
@@ -103,6 +103,7 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
 
     // removed the hmac from the cipher string to generate the new hmac
     let cipherdata_hmacless: &str = truncate(&cipherdata, cipherdata_len);
+    warn(cipherdata_hmacless);
 
     // getting old and new hmac values
     let old_hmac: &str = cipherdata.substring(cipherdata_len, cipherdata_len + 64);
