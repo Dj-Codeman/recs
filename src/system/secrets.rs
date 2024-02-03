@@ -1031,7 +1031,6 @@ fn verify_signature(
     let new_hash_data: String = match String::from_utf8(encoded_buffer.to_vec()) {
         Ok(d) => d,
         Err(e) => {
-            notice(&e.to_string());
             return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
                 RecsErrorType::InvalidTypeGiven,
                 &e.to_string(),
@@ -1039,7 +1038,8 @@ fn verify_signature(
         }
     };
     // pulling the hash from the signature
-    let sig_hash: String = truncate(&signature[10..], 20).to_owned();
+    let sig_hash: String = truncate(&signature[11..], 21).to_owned();
+    notice(&sig_hash);
     let new_hash: String = truncate(&create_hash(new_hash_data.clone()), 20).to_owned();
 
     warnings.push(match sig_hash == new_hash {
