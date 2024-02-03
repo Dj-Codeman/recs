@@ -792,8 +792,15 @@ pub fn read(
         // ! reading the chunks
         loop {
             // Setting the pointer and cursors before the read
-            file.seek(SeekFrom::Start(range_start as u64))
-                .expect("Failed to set seek head");
+            match file.seek(SeekFrom::Start(range_start as u64)) {
+                Ok(d) => d,
+                Err(e) => {
+                    return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                        system::errors::SystemErrorType::ErrorReadingFile,
+                        &format!("Failed to set seek head: {}", e.to_string()),
+                    )))
+                }
+            };
 
             // ! handeling the file reading and outputs
             match file.read_exact(&mut buffer) {
@@ -809,8 +816,8 @@ pub fn read(
                     };
 
                     // take the first spliiting chunk into signature and cipher data
-                    let encoded_signature: &str = truncate(&secret_buffer, 62);
-                    let cipher_buffer: &str = &secret_buffer[62..];
+                    let encoded_signature: &str = truncate(&secret_buffer, 63); // 61 + how ever big the chunk count is
+                    let cipher_buffer: &str = &secret_buffer[63..];
 
                     // * decrypting the chunk
                     let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &writting_key) {
