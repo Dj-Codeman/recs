@@ -1,6 +1,6 @@
 use hex::encode;
 use logging::append_log;
-use pretty::warn;
+use pretty::{notice, warn};
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -673,6 +673,8 @@ pub fn read(
                 )))
             }
         };
+
+        notice(&format!("{:?}", secret_map));
 
         let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![None];
 
