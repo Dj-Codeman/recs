@@ -3,6 +3,7 @@ use pretty::output;
 use std::fmt;
 use system::errors::SystemError;
 
+#[derive(Debug)]
 pub enum RecsRecivedErrors {
     LoggerError(LoggerError),
     SystemError(SystemError),
