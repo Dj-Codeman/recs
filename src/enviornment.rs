@@ -13,13 +13,13 @@ use crate::{
 };
 
 // Static stuff
-pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
+pub const VERSION: &str = "R1.0.1"; // make this cooler in the future
 
 // semi static
 lazy_static! {
     // Default rescs directory
     #[derive(Debug)]
-    pub static ref SYSTEM_PATH: String = format!("/var/recs-{}", truncate(&create_hash(unsafe { PROGNAME.to_owned() }), 5 ));
+    pub static ref SYSTEM_PATH: String = format!("/var/{}", unsafe { PROGNAME });
     // Paths for important things
     pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.to_owned());
     pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.to_owned());
