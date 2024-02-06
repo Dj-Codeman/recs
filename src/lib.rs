@@ -15,7 +15,7 @@ mod local_env;
 mod secret;
 use errors::RecsRecivedErrors;
 use local_env::SYSTEM_ARRAY_LOCATION;
-use logging::{append_log, start_log};
+use logging::{append_log};
 use secret::{read_raw, write_raw};
 use system::{create_hash, del_file, is_path};
 
@@ -71,7 +71,7 @@ pub fn initialize() -> Result<(), RecsRecivedErrors> {
         false => false,
     };
 
-    match start_log(unsafe { &PROGNAME }) {
+    match append_log(unsafe { &PROGNAME }, "RECS STARTED") {
         Ok(_) => (),
         Err(e) => return Err(RecsRecivedErrors::repack(e)),
     };
