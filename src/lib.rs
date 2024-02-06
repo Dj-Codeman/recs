@@ -35,11 +35,10 @@ use crate::{
 /// Debugging should be set while initializing the lib, If no defined the default is disabled
 pub static mut DEBUGGING: Option<bool> = None;
 
-/// The PROG variable must be defined for logging, When this lib is used by diffrent programs, this will be the diffrenciator for the log files
-pub static mut PROGNAME: &str = "";
+/// This value is set by set_prog it is used for logging creating paths and other functions. to handel its creation or modification use set_prog() to avoid wrapping 
+pub static mut PROGNAME: String = "".to_string();
 
-
-// Mandatory for the lib
+/// Changes some mandatory logging functions and enables longer outputs in logs
 pub fn set_debug(option: bool) {
     // Enables longer backtraces and enables more verbose logging
     match option {
@@ -48,6 +47,12 @@ pub fn set_debug(option: bool) {
     }
 }
 
+/// This function handels setting the PROGNAME variables
+pub fn set_prog(data: &str) {
+	unsafe { PROGNAME = data.to_owned() };
+}
+
+/// Initialize checks the progname, and debugging values snf ensure the lib is ready to function
 pub fn initialize() -> Result<(), RecsRecivedErrors> {
     let debugging: bool = match unsafe { DEBUGGING } {
         Some(d) => match d {
@@ -119,7 +124,8 @@ fn ensure_max_map_exists() -> Result<(), RecsRecivedErrors> {
 }
 
 // Normal actions
-// TODO identify if exit0 is appropriate and revisit
+
+/// Insert takes a relative path encrypts and stores files. Weather or not they're deleted is based on values in the config.rs file 
 pub fn insert(filename: String, owner: String, name: String) -> Result<(), RecsRecivedErrors> {
     match write(filename, owner, name) {
         Ok(_) => return Ok(()),
