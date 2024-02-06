@@ -2,7 +2,7 @@
 use lazy_static::lazy_static;
 use logging::append_log;
 use sysinfo::{System, SystemExt};
-use system::{create_hash, make_dir, truncate}; // for finding free ram for vectors
+use system::{errors::SystemError, is_path, make_dir}; // for finding free ram for vectors
 
 use crate::{
     array::{generate_system_array, index_system_array},
@@ -61,8 +61,8 @@ pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
 fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
     // * Verifing path exists and creating missing ones
 
-    match make_dir(&SYSTEM_PATH) {
-        Ok(_) => {
+    match is_path(&SYSTEM_PATH) {
+        true => {
             // we're ok to populate folder tree
             let mut paths = vec![];
             paths.insert(0, DATA.clone());
@@ -81,7 +81,12 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
                 };
             }
         }
-        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+        false => {
+            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                system::errors::SystemErrorType::ErrorCreatingFile,
+                "SYSTEM_PATH is missing",
+            )))
+        }
     };
     Ok(())
 }

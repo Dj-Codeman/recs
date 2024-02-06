@@ -361,7 +361,7 @@ checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
 [[package]]
 name = "logging"
 version = "0.2.1"
-source = "git+https://github.com/Dj-Codeman/logger.git#bdb9f94cf3d379d162c7765bf8162b2b89bee974"
+source = "git+https://github.com/Dj-Codeman/logger.git#221faa62a0d43928cd5a718b8620b7a915db4b4a"
 dependencies = [
  "chrono",
  "system",
