@@ -1,5 +1,6 @@
 use hex::encode;
 use logging::append_log;
+use pretty::notice;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -47,6 +48,7 @@ pub fn write(
     let file_size = match metadata(&filename) {
         Ok(d) => d.len(),
         Err(e) => {
+            notice(&e.to_string());
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                 system::errors::SystemErrorType::ErrorReadingFile,
                 &e.to_string(),

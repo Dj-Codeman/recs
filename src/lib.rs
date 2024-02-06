@@ -112,7 +112,7 @@ fn ensure_system_path(prog: &str, debug: bool) -> Result<(), RecsRecivedErrors> 
 
 fn ensure_max_map_exists() -> Result<(), RecsRecivedErrors> {
     let max_map = ARRAY_LEN / CHUNK_SIZE;
-    let max_map_path = format!("{}/{}.map", *MAPS, max_map);
+    let max_map_path = format!("{}/{}.map", *MAPS, max_map - 1);
 
     match is_path(&max_map_path) {
         true => return Ok(()),
