@@ -1,4 +1,3 @@
-// use nix::unistd::geteuid;
 use lazy_static::lazy_static;
 use logging::append_log;
 use sysinfo::{System, SystemExt};
