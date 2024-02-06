@@ -88,7 +88,7 @@ fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
         .append(true)
         .open(SYSTEM_ARRAY_LOCATION.to_owned())
         .map_err(|e| {
-            let _ = append_log(unsafe { PROGNAME }, &e.to_string());
+            let _ = append_log(unsafe { &PROGNAME }, &e.to_string());
             RecsRecivedErrors::SystemError(SystemError::new_details(
                 system::errors::SystemErrorType::ErrorCreatingFile,
                 &e.to_string(),
@@ -96,7 +96,7 @@ fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
         })?;
 
     write!(system_array_file, "{}", contents).map_err(|e| {
-        let _ = append_log(unsafe { PROGNAME }, &e.to_string());
+        let _ = append_log(unsafe { &PROGNAME }, &e.to_string());
         RecsRecivedErrors::SystemError(SystemError::new_details(
             system::errors::SystemErrorType::ErrorCreatingFile,
             &e.to_string(),

@@ -271,14 +271,14 @@ pub fn write(
                         match e {
                             RecsRecivedErrors::LoggerError(ed) => {
                                 let _ = append_log(
-                                    unsafe { PROGNAME },
+                                    unsafe { &PROGNAME },
                                     &format!("UNUSED: an error occoured while logging: {:?}", ed),
                                 );
                                 return Err(RecsRecivedErrors::LoggerError(ed))
                             }
                             RecsRecivedErrors::SystemError(ed) => {
                                 let _ = append_log(
-                                    unsafe { PROGNAME },
+                                    unsafe { &PROGNAME },
                                     &format!(
                                         "A system error has occoured while writing to file: {:?}",
                                         ed
@@ -288,7 +288,7 @@ pub fn write(
                             }
                             RecsRecivedErrors::RecsError(ed) => {
                                 let _ = append_log(
-                                    unsafe { PROGNAME },
+                                    unsafe { &PROGNAME },
                                     &format!("RECS ERROR: {:?}", ed),
                                 );
                                 return Err(RecsRecivedErrors::RecsError(ed))
@@ -300,7 +300,7 @@ pub fn write(
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     // reached end of file
-                    let _ = append_log(unsafe { PROGNAME }, &format!("Finished reading data from {}", &filename));
+                    let _ = append_log(unsafe { &PROGNAME }, &format!("Finished reading data from {}", &filename));
                     break;
                 }
                 Err(e) => {
@@ -668,10 +668,10 @@ pub fn read(
 
         let _ = match unsafe { DEBUGGING } {
             Some(bug) => match bug {
-                true => append_log(unsafe { PROGNAME }, &format!("{:?}", secret_map)),
-                false => append_log(unsafe { PROGNAME }, &format!("Secret map data recived")),
+                true => append_log(unsafe { &PROGNAME }, &format!("{:?}", secret_map)),
+                false => append_log(unsafe { &PROGNAME }, &format!("Secret map data recived")),
             },
-            None => append_log(unsafe { PROGNAME }, &format!("Secret map data recived")),
+            None => append_log(unsafe { &PROGNAME }, &format!("Secret map data recived")),
         };
         
         let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![None];
@@ -716,7 +716,7 @@ pub fn read(
             Ok(d) => {
                 if d.len() as usize == 0 {
                     let _ = append_log(
-                        unsafe { PROGNAME },
+                        unsafe { &PROGNAME },
                         "The secret file has a size of zero, it is corrupted",
                     );
                     return Err(RecsRecivedErrors::RecsError(RecsError::new(
@@ -907,7 +907,7 @@ pub fn read(
                 Err(e) => return Err(e),
             }
         }
-        let _ = append_log(unsafe { PROGNAME }, &format!("Decrypting request: {} has been decrypted !", &secret_map.file_path));
+        let _ = append_log(unsafe { &PROGNAME }, &format!("Decrypting request: {} has been decrypted !", &secret_map.file_path));
         return Ok(warnings); // return ok val with no warnings
     } else {
         let _ = append_log(unsafe { &PROGNAME }, "The secret map doen't exist");
@@ -1073,7 +1073,7 @@ fn verify_signature(
         ))),
     });
 
-    let _ = append_log(unsafe { PROGNAME }, &format!("Decrypting request: {} signatures verified, writing", &new_hash));
+    let _ = append_log(unsafe { &PROGNAME }, &format!("Decrypting request: {} signatures verified, writing", &new_hash));
     return Ok(warnings);
 }
 

@@ -86,7 +86,7 @@ pub fn encrypt(
     cipherdata.push_str(&hmac);
 
     if cipherdata.len() == 0 {
-        let _ = append_log(unsafe { PROGNAME }, "NO CIPHER DATA RECIVED");
+        let _ = append_log(unsafe { &PROGNAME }, "NO CIPHER DATA RECIVED");
         return Err(RecsRecivedErrors::RecsError(RecsError::new(
             RecsErrorType::Error,
         )));

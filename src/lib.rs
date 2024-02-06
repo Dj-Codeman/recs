@@ -36,7 +36,7 @@ use crate::{
 pub static mut DEBUGGING: Option<bool> = None;
 
 /// This value is set by set_prog it is used for logging creating paths and other functions. to handel its creation or modification use set_prog() to avoid wrapping 
-pub static mut PROGNAME: String = "".to_string();
+pub static mut PROGNAME: &str = "";
 
 /// Changes some mandatory logging functions and enables longer outputs in logs
 pub fn set_debug(option: bool) {
@@ -48,8 +48,8 @@ pub fn set_debug(option: bool) {
 }
 
 /// This function handels setting the PROGNAME variables
-pub fn set_prog(data: &str) {
-	unsafe { PROGNAME = data.to_owned() };
+pub fn set_prog(data: &'static str) {
+	unsafe { PROGNAME = data };
 }
 
 /// Initialize checks the progname, and debugging values snf ensure the lib is ready to function
@@ -199,7 +199,7 @@ pub fn update_map(map_num: u32) -> bool { // Add a result to return errors from 
     };
 
     if new_hash == None {
-        let _ = append_log( unsafe { PROGNAME }, &format!("Failed to fetch chunk data for number {}", &map_num));
+        let _ = append_log( unsafe { &PROGNAME }, &format!("Failed to fetch chunk data for number {}", &map_num));
     }
 
     //  making new map
