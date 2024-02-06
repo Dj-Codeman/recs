@@ -2,7 +2,7 @@
 use lazy_static::lazy_static;
 use logging::append_log;
 use sysinfo::{System, SystemExt};
-use system::{create_hash, make_dir}; // for finding free ram for vectors
+use system::{create_hash, make_dir, truncate}; // for finding free ram for vectors
 
 use crate::{
     array::{generate_system_array, index_system_array},
@@ -19,7 +19,7 @@ pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
 lazy_static! {
     // Default rescs directory
     #[derive(Debug)]
-    pub static ref SYSTEM_PATH: String = format!("/var/recs-{}", create_hash(unsafe { PROGNAME.to_owned() }));
+    pub static ref SYSTEM_PATH: String = format!("/var/recs-{}", truncate(&create_hash(unsafe { PROGNAME.to_owned() }), 5 ));
     // Paths for important things
     pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.to_owned());
     pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.to_owned());
