@@ -15,7 +15,7 @@ mod local_env;
 mod secret;
 use errors::RecsRecivedErrors;
 use local_env::SYSTEM_ARRAY_LOCATION;
-use logging::{append_log};
+use logging::append_log;
 use secret::{read_raw, write_raw};
 use system::{create_hash, del_file, is_path};
 

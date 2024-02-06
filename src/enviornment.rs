@@ -19,13 +19,12 @@ pub const VERSION: &str = "R1.0.0"; // make this cooler in the future
 lazy_static! {
     // Default rescs directory
     #[derive(Debug)]
-    pub static ref SYSTEM_PATH: String = format!("/srv/recs/{}", create_hash(unsafe { PROGNAME.to_owned() }));
+    pub static ref SYSTEM_PATH: String = format!("/var/recs-{}", create_hash(unsafe { PROGNAME.to_owned() }));
     // Paths for important things
-    pub static ref ARRAY_PATH: String = format!("/usr/recs");
     pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.to_owned());
     pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.to_owned());
     pub static ref META: String = format!("{}/meta", SYSTEM_PATH.to_owned());
-    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("{}/array.recs", ARRAY_PATH.to_owned());
+    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("{}/array.recs", SYSTEM_PATH.to_owned());
 }
 // !  enviornment as in program
 
@@ -69,7 +68,6 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
             paths.insert(0, DATA.clone());
             paths.insert(1, MAPS.clone());
             paths.insert(2, META.clone());
-            paths.insert(2, ARRAY_PATH.clone());
 
             for path in paths.iter() {
                 let _ = match make_dir(path) {
