@@ -13,11 +13,9 @@ use system::{create_hash, del_file, errors::SystemError, is_path};
 use crate::{
     array::array_arimitics,
     array_tools::fetch_chunk,
-    config::USER_KEY_LOCATION,
     encrypt::{decrypt, encrypt},
     errors::{RecsError, RecsErrorType, RecsRecivedErrors},
-    local_env::MAPS,
-    local_env::VERSION,
+    local_env::{MAPS, USER_KEY_LOCATION, VERSION},
     PROGNAME,
 };
 
@@ -111,14 +109,14 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         .create_new(true)
         .write(true)
         .append(true)
-        .open(&USER_KEY_LOCATION)
+        .open(&*USER_KEY_LOCATION)
     {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                 system::errors::SystemErrorType::ErrorCreatingFile,
                 &format!(
-                    "An erro occoured while creating the master json file: {}",
+                    "An error occoured while creating the master json file: {}",
                     e.to_string()
                 ),
             )))
@@ -158,7 +156,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         hash: String::from(checksum_string),
         parent: String::from("SELF"),
         version: String::from(VERSION),
-        location: String::from(USER_KEY_LOCATION),
+        location: (&USER_KEY_LOCATION).to_string(),
         key: 0,
     };
 
@@ -256,7 +254,7 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
     let userkey = hex::encode(&password_key);
     let secret: String = "The hotdog man isn't real !?".to_string();
     // ! make the read the userkey from the map in the future
-    let verification_ciphertext: String = match read_to_string(USER_KEY_LOCATION) {
+    let verification_ciphertext: String = match read_to_string(&*USER_KEY_LOCATION) {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(

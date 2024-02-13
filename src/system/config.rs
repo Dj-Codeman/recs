@@ -6,7 +6,7 @@
 	//  $datadir will be illegible
 	//  IF THIS KEY IS DELETED ALL DATA IS CONSIDERED LOST
 
-pub const USER_KEY_LOCATION: &str = "/usr/recs/userdata.recs";
+	//pub const USER_KEY_LOCATION: &str = "/usr/recs/userdata.recs";
 
 	// currently for debuging 
 	// the stream buffer will be dynamically assigned at runtime
