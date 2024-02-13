@@ -1,6 +1,6 @@
 use hex::encode;
 use logging::append_log;
-use pretty::notice;
+use pretty::{notice, warn};
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -80,7 +80,8 @@ pub fn write(
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
     match append_log(unsafe { &PROGNAME }, &msg) {
         Ok(_) => (),
-        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+        Err(e) => { warn("Error while reading logs"); 
+            return Err(RecsRecivedErrors::repack(e)) },
     };
 
     // testing if the file exists
