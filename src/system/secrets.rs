@@ -84,6 +84,8 @@ pub fn write(
             return Err(RecsRecivedErrors::repack(e)) },
     };
 
+    warn(&filename);
+
     // testing if the file exists
     let filename_existence: bool = is_path(&filename);
 
