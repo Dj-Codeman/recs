@@ -45,7 +45,7 @@ pub fn write(
     // String is key data, The u16 is the chunk cound
     //TODO Dep or simplyfy
     let max_buffer_size = calc_buffer();
-    let file_size = match metadata(&filename) {
+    let file_size = match metadata(&canonicalize(&filename).unwrap()) {
         Ok(d) => d.len(),
         Err(e) => {
             warn(&e.to_string());
