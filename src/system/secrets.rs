@@ -20,7 +20,6 @@ use crate::{
     array::array_arimitics,
     array_tools::fetch_chunk,
     auth::create_writing_key,
-    config::{_SOFT_MOVE_FILES, _LEAVE_IN_PEACE},
     encrypt::{decrypt, encrypt},
     errors::{
         RecsError, RecsErrorType, RecsRecivedErrors, RecsRecivedWarnings, RecsWarning,
@@ -393,13 +392,6 @@ pub fn write(
             }
         };
 
-        // after everything has been written we can delete the file
-        if !_SOFT_MOVE_FILES {
-            match del_file(&secret_data_struct.file_path) {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-            }
-        }
         // resolving the key data
         let key_data: String = match create_writing_key(match fetch_chunk_helper(num) {
             Ok(d) => d,
