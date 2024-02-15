@@ -5,7 +5,9 @@ use pretty::warn;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{canonicalize, metadata, read_to_string, File, OpenOptions}, io::{prelude::*, SeekFrom, Write}, path::Path
+    fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
+    io::{prelude::*, SeekFrom, Write},
+    path::Path,
 };
 use system::{
     create_hash, del_dir, del_file,
@@ -18,7 +20,7 @@ use crate::{
     array::array_arimitics,
     array_tools::fetch_chunk,
     auth::create_writing_key,
-    config::{_LEAVE_IN_PEACE, SOFT_MOVE_FILES},
+    config::{SOFT_MOVE_FILES, _LEAVE_IN_PEACE},
     encrypt::{decrypt, encrypt},
     errors::{
         RecsError, RecsErrorType, RecsRecivedErrors, RecsRecivedWarnings, RecsWarning,
@@ -710,8 +712,8 @@ pub fn read(
 
         // Creating a temp filename to write the data too so we can change the owner and
         // ensure the data is there
-        let temp_name: String = match is_path(&secret_map.secret_path) {
-            true => create_hash(secret_map.secret_path.clone()),
+        let temp_name: String = match is_path(&secret_map.secret_path) { // This ensure the tmp path are more likely to be unique
+            true => truncate(&create_hash(secret_map.secret_path.clone())[5..], 10).to_owned(),
             false => {
                 return Err(RecsRecivedErrors::RecsError(RecsError::new(
                     RecsErrorType::InvalidFile,
@@ -720,6 +722,7 @@ pub fn read(
         };
 
         let tmp_path: String = format!("/tmp/{}", temp_name);
+        let _ = del_file(&tmp_path); // ! do something better
 
         // generating the secret key for the file
         let writting_key: String =
@@ -1031,7 +1034,12 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
             };
         }
         match del_file(&secret_map_path) {
-            Ok(_) => _ = append_log(unsafe { PROGNAME }, &format!("{} has been deleted", &secret_map_path)),
+            Ok(_) => {
+                _ = append_log(
+                    unsafe { PROGNAME },
+                    &format!("{} has been deleted", &secret_map_path),
+                )
+            }
             Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
         };
         // }
