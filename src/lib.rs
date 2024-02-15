@@ -133,9 +133,10 @@ pub fn insert(filename: String, owner: String, name: String) -> Result<(), RecsR
     }
 }
 
-pub fn retrive(owner: String, name: String) -> Result<(), RecsRecivedErrors> {
-    match read(owner, name) {
-        Ok(_) => return Ok(()),
+/// Retrieve starts a request to decrypt the file requested on sucess it returns where the file currently is 'String' and where to file was when it was encrypted 'String' it is up to the client to decide weather to move the file there or read the contents and delete the file
+pub fn retrive(owner: String, name: String, uid: u32) -> Result<(String, String), RecsRecivedErrors> {
+    match read(owner, name, uid) {
+        Ok((file_path, file_home, _)) => return Ok((file_path, file_home)), // TODO implement a handeler for warning
         Err(e) => return Err(e),
     }
 }

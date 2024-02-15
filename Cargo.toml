@@ -1,6 +1,6 @@
 [package]
 name = "recs"
-version = "1.0.1"
+version = "1.1.0"
 edition = "2021"
 authors = ["Darrion <dwhitfield@ramfield.net>"]
 
@@ -27,7 +27,7 @@ serde_json = "1.0.64"
 sha2 = "0.10"
 substring = "1.4.5"
 sysinfo = "0.28.1"
-# nix = "0.23.0"
+nix = "0.23.0"
 lazy_static = "1.4.0"
 pretty = { git = "https://github.com/Dj-Codeman/pretty.git" }
 logging = { git = "https://github.com/Dj-Codeman/logger.git" }

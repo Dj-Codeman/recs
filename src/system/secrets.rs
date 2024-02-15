@@ -1,12 +1,11 @@
 use hex::encode;
 use logging::append_log;
-use pretty::{notice, warn};
+use nix::unistd::{chown, Uid};
+use pretty::warn;
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
-    io::{prelude::*, SeekFrom, Write},
-    path::Path,
+    fs::{canonicalize, metadata, read_to_string, File, OpenOptions}, io::{prelude::*, SeekFrom, Write}, path::Path
 };
 use system::{
     create_hash, del_dir, del_file,
@@ -16,10 +15,17 @@ use system::{
 
 // self and create are user made code
 use crate::{
-    array::array_arimitics, array_tools::fetch_chunk, auth::create_writing_key, config::{LEAVE_IN_PEACE, SOFT_MOVE_FILES}, encrypt::{decrypt, encrypt}, errors::{
+    array::array_arimitics,
+    array_tools::fetch_chunk,
+    auth::create_writing_key,
+    config::{_LEAVE_IN_PEACE, SOFT_MOVE_FILES},
+    encrypt::{decrypt, encrypt},
+    errors::{
         RecsError, RecsErrorType, RecsRecivedErrors, RecsRecivedWarnings, RecsWarning,
         RecsWarningType,
-    }, local_env::{calc_buffer, DATA, META, VERSION}, DEBUGGING, PROGNAME
+    },
+    local_env::{calc_buffer, DATA, META, VERSION},
+    DEBUGGING, PROGNAME,
 };
 
 // ! This is the struct for all secrets CHANGE WITH CARE
@@ -45,16 +51,14 @@ pub fn write(
     // String is key data, The u16 is the chunk cound
     //TODO Dep or simplyfy
     let max_buffer_size = calc_buffer();
-    warn(&filename);
-    warn(&canonicalize(&filename).unwrap().into_os_string().into_string().unwrap());
-    let file_size = match metadata(&canonicalize(&filename).unwrap()) {
+    let file_size: u64 = match metadata(&filename) {
         Ok(d) => d.len(),
         Err(e) => {
             warn(&e.to_string());
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                 system::errors::SystemErrorType::ErrorReadingFile,
                 &e.to_string(),
-            )))
+            )));
         }
     };
     // We're are trying to balance the speed and performance here
@@ -82,8 +86,10 @@ pub fn write(
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
     match append_log(unsafe { &PROGNAME }, &msg) {
         Ok(_) => (),
-        Err(e) => { warn("Error while reading logs"); 
-            return Err(RecsRecivedErrors::repack(e)) },
+        Err(e) => {
+            warn("Error while reading logs");
+            return Err(RecsRecivedErrors::repack(e));
+        }
     };
 
     warn(&filename);
@@ -281,7 +287,7 @@ pub fn write(
                                     unsafe { &PROGNAME },
                                     &format!("UNUSED: an error occoured while logging: {:?}", ed),
                                 );
-                                return Err(RecsRecivedErrors::LoggerError(ed))
+                                return Err(RecsRecivedErrors::LoggerError(ed));
                             }
                             RecsRecivedErrors::SystemError(ed) => {
                                 let _ = append_log(
@@ -291,14 +297,14 @@ pub fn write(
                                         ed
                                     ),
                                 );
-                                return Err(RecsRecivedErrors::SystemError(ed))
+                                return Err(RecsRecivedErrors::SystemError(ed));
                             }
                             RecsRecivedErrors::RecsError(ed) => {
                                 let _ = append_log(
                                     unsafe { &PROGNAME },
                                     &format!("RECS ERROR: {:?}", ed),
                                 );
-                                return Err(RecsRecivedErrors::RecsError(ed))
+                                return Err(RecsRecivedErrors::RecsError(ed));
                             }
                         }
                     };
@@ -307,7 +313,10 @@ pub fn write(
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     // reached end of file
-                    let _ = append_log(unsafe { &PROGNAME }, &format!("Finished reading data from {}", &filename));
+                    let _ = append_log(
+                        unsafe { &PROGNAME },
+                        &format!("Finished reading data from {}", &filename),
+                    );
                     break;
                 }
                 Err(e) => {
@@ -639,10 +648,12 @@ pub fn read_raw(
     }
 }
 
+/// The read function decrypts the data in a temporary path, It will return The path the the file decrypted, The location of the file when it was encrypted, and a Vec<Options<Warning>> if anything non fatal happend
 pub fn read(
     secret_owner: String,
     secret_name: String,
-) -> Result<Vec<Option<RecsRecivedWarnings>>, RecsRecivedErrors> {
+    owner_uid: u32,
+) -> Result<(String, String, Vec<Option<RecsRecivedWarnings>>), RecsRecivedErrors> {
     // creating the secret json path
     match append_log(unsafe { &PROGNAME }, "Decrypting request") {
         Ok(_) => (),
@@ -680,7 +691,7 @@ pub fn read(
             },
             None => append_log(unsafe { &PROGNAME }, &format!("Secret map data recived")),
         };
-        
+
         let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![None];
 
         // ! Validating that we can mess with this data
@@ -697,15 +708,18 @@ pub fn read(
             }
         });
 
+        // Creating a temp filename to write the data too so we can change the owner and
         // ensure the data is there
-        match is_path(&secret_map.secret_path) {
-            true => (),
+        let temp_name: String = match is_path(&secret_map.secret_path) {
+            true => create_hash(secret_map.secret_path.clone()),
             false => {
                 return Err(RecsRecivedErrors::RecsError(RecsError::new(
                     RecsErrorType::InvalidFile,
                 )))
             }
         };
+
+        let tmp_path: String = format!("/tmp/{}", temp_name);
 
         // generating the secret key for the file
         let writting_key: String =
@@ -776,11 +790,12 @@ pub fn read(
             )));
         }
 
+        // Opening plain file to write too
         let mut plain_file = match OpenOptions::new()
             .create_new(true)
             .write(true)
             .append(true)
-            .open(&secret_map.file_path)
+            .open(&tmp_path)
         {
             Ok(d) => d,
             Err(e) => {
@@ -914,8 +929,35 @@ pub fn read(
                 Err(e) => return Err(e),
             }
         }
-        let _ = append_log(unsafe { &PROGNAME }, &format!("Decrypting request: {} has been decrypted !", &secret_map.file_path));
-        return Ok(warnings); // return ok val with no warnings
+        let _ = append_log(
+            unsafe { &PROGNAME },
+            &format!(
+                "Decrypting request: {} has been decrypted !",
+                &secret_map.file_path
+            ),
+        );
+        // changing file owner
+        let safe_path = match canonicalize(&tmp_path) {
+            Ok(d) => d,
+            Err(e) => {
+                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                    RecsErrorType::InvalidFile,
+                    &e.to_string(),
+                )))
+            }
+        };
+
+        match chown(&safe_path, Some(Uid::from_raw(owner_uid)), None) {
+            Ok(_) => return Ok((tmp_path, secret_map.file_path, warnings)), // return the temporary path and let the client handel it
+            Err(e) => {
+                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
+                    RecsErrorType::Error,
+                    &e.to_string(),
+                )))
+            }
+        }
+        // moving to the right dir
+        // secret_map.file_path
     } else {
         let _ = append_log(unsafe { &PROGNAME }, "The secret map doen't exist");
         return Err(RecsRecivedErrors::RecsError(RecsError::new(
@@ -961,36 +1003,37 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
         };
 
         // the config
-        if LEAVE_IN_PEACE {
-            match read(secret_owner, secret_name) {
-                Ok(_) => (),
-                Err(e) => return Err(e),
-            };
+        // if LEAVE_IN_PEACE {
+        // match read(secret_owner, secret_name) {
+        // Ok(_) => (),
+        // Err(e) => return Err(e),
+        // };
 
-            // deleted secret data
-            if is_path(&secret_map.secret_path) {
-                match del_file(&secret_map.secret_path) {
-                    Ok(_) => (),
-                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-                };
-            }
-            match del_file(&secret_map_path) {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-            };
-        } else {
-            // deleted secret data
-            if is_path(&secret_map.secret_path) {
-                match del_file(&secret_map.secret_path) {
-                    Ok(_) => (),
-                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-                };
-            }
-            match del_file(&secret_map_path) {
+        //deleted secret data
+        // if is_path(&secret_map.secret_path) {
+        // match del_file(&secret_map.secret_path) {
+        // Ok(_) => (),
+        // Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+        // };
+        // }
+        // match del_file(&secret_map_path) {
+        // Ok(_) => (),
+        // Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+        // };
+        // } else {
+        // deleted secret data
+        if is_path(&secret_map.secret_path) {
+            match del_file(&secret_map.secret_path) {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
             };
         }
+        match del_file(&secret_map_path) {
+            Ok(_) => _ = append_log(unsafe { PROGNAME }, &format!("{} has been deleted", &secret_map_path)),
+            Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+        };
+        // }
+
         return Ok(());
     } else {
         match append_log(unsafe { &PROGNAME }, "The file requested doesn't exist") {
@@ -1080,7 +1123,13 @@ fn verify_signature(
         ))),
     });
 
-    let _ = append_log(unsafe { &PROGNAME }, &format!("Decrypting request: {} signatures verified, writing", &new_hash));
+    let _ = append_log(
+        unsafe { &PROGNAME },
+        &format!(
+            "Decrypting request: {} signatures verified, writing",
+            &new_hash
+        ),
+    );
     return Ok(warnings);
 }
 
