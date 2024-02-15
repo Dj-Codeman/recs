@@ -779,16 +779,18 @@ pub fn read(
         let mut signature: String = String::new(); // the decoded signature
 
         // * checking if its safe to make the file
-        let is_file: bool = is_path(&secret_map.file_path);
-        if is_file == true {
-            match append_log(unsafe { &PROGNAME }, "The file requested already exists") {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::repack(e)),
-            };
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::Error,
-            )));
-        }
+
+        // ! MOVE THIS TO THE DUSA-CLI CLIENT
+        // let is_file: bool = is_path(&secret_map.file_path);
+        // if is_file == true {
+        //     match append_log(unsafe { &PROGNAME }, "The file requested already exists") {
+        //         Ok(_) => (),
+        //         Err(e) => return Err(RecsRecivedErrors::repack(e)),
+        //     };
+        //     return Err(RecsRecivedErrors::RecsError(RecsError::new(
+        //         RecsErrorType::Error,
+        //     )));
+        // }
 
         // Opening plain file to write too
         let mut plain_file = match OpenOptions::new()
