@@ -20,7 +20,7 @@ use crate::{
     array::array_arimitics,
     array_tools::fetch_chunk,
     auth::create_writing_key,
-    config::{SOFT_MOVE_FILES, _LEAVE_IN_PEACE},
+    config::{_SOFT_MOVE_FILES, _LEAVE_IN_PEACE},
     encrypt::{decrypt, encrypt},
     errors::{
         RecsError, RecsErrorType, RecsRecivedErrors, RecsRecivedWarnings, RecsWarning,
@@ -394,7 +394,7 @@ pub fn write(
         };
 
         // after everything has been written we can delete the file
-        if !SOFT_MOVE_FILES {
+        if !_SOFT_MOVE_FILES {
             match del_file(&secret_data_struct.file_path) {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
@@ -781,19 +781,7 @@ pub fn read(
         let mut encoded_buffer: Vec<u8> = vec![]; // decrypted hex encoded data
         let mut signature: String = String::new(); // the decoded signature
 
-        // * checking if its safe to make the file
-
-        // ! MOVE THIS TO THE DUSA-CLI CLIENT
-        // let is_file: bool = is_path(&secret_map.file_path);
-        // if is_file == true {
-        //     match append_log(unsafe { &PROGNAME }, "The file requested already exists") {
-        //         Ok(_) => (),
-        //         Err(e) => return Err(RecsRecivedErrors::repack(e)),
-        //     };
-        //     return Err(RecsRecivedErrors::RecsError(RecsError::new(
-        //         RecsErrorType::Error,
-        //     )));
-        // }
+        // // // * checking if its safe to make the file
 
         // Opening plain file to write too
         let mut plain_file = match OpenOptions::new()

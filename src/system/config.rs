@@ -11,7 +11,8 @@ pub const STREAMING_BUFFER_SIZE: f64 = 102400.00;
 	//  set 1 to use cp instead of mv when gatheing files to encrypt
 	//  default = false
 
-pub const SOFT_MOVE_FILES: bool = false;
+#[deprecated(since="1.1.0", note = "Being a library run by a non-root user, we no longer have the option to delete files we dont own at will")]
+pub const _SOFT_MOVE_FILES: bool = false;
 
 
 	//  leave in peace
