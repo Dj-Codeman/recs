@@ -1030,8 +1030,9 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
             Ok(_) => (),
             Err(e) => return Err(RecsRecivedErrors::repack(e)),
         };
-        return Err(RecsRecivedErrors::RecsError(RecsError::new(
+        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
             RecsErrorType::Error,
+            "The requested file doesn't exist"
         )));
     }
 }
