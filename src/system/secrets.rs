@@ -713,7 +713,10 @@ pub fn read(
             }
         };
 
-        let tmp_path: String = format!("/tmp/{}", temp_name);
+        use random_string::generate;
+        let charset = "1234567890";
+
+        let tmp_path: String = format!("/tmp/{}{}", temp_name, generate(6, charset));
         let _ = std::fs::remove_file(&tmp_path);
         // let _ = del_file(&tmp_path);     // ! do something better
 
