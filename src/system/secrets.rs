@@ -714,7 +714,8 @@ pub fn read(
         };
 
         let tmp_path: String = format!("/tmp/{}", temp_name);
-        let _ = del_file(&tmp_path); // ! do something better
+        let _ = std::fs::remove_file(&tmp_path);
+        // let _ = del_file(&tmp_path);     // ! do something better
 
         // generating the secret key for the file
         let writting_key: String =
