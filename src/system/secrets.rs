@@ -713,10 +713,14 @@ pub fn read(
             }
         };
 
-        use random_string::generate;
-        let charset = "1234567890";
+        // really dumb way to get random int
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let start = SystemTime::now();
+        let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
 
-        let tmp_path: String = format!("/tmp/{}{}", temp_name, generate(6, charset));
+        let tmp_path: String = format!("/tmp/{}{:?}", temp_name, since_the_epoch.as_secs());
         // let _ = std::fs::remove_file(&tmp_path);
         let _ = del_file(&tmp_path);     // ! do something better
 
