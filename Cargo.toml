@@ -20,7 +20,6 @@ hmac = "0.12.1"
 # can these two be merged ?
 rand = "0.8.5"
 rand_core = { version = "0.6", features = ["std"] }
-random-string = "1.1.0"
 ring = "0.16.20"
 rpassword = "0.0.4"
 serde = { version = "1.0.126", features = ["derive"] }
