@@ -437,9 +437,9 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                 SystemErrorType::ErrorOpeningFile,
-                &e.to_string(),
+                &format!("Error while reading dummy file: {:?}", &e.to_string()),
             )))
-        }
+        },
     };
 
     // encrypting the dummy file
