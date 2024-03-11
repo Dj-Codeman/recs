@@ -562,9 +562,9 @@ pub fn read_raw(
             };
 
             // take the first spliiting chunk into signature and cipher data
-            let encoded_signature: &str = truncate(&secret_buffer, 63);
+            let encoded_signature: &str = truncate(&secret_buffer, 64);
             // ! When this inevidably fails, Remember the paddingcount() changes the sig legnth.
-            let cipher_buffer: &str = &secret_buffer[62..]; // * this is the encrypted hex encoded bytes
+            let cipher_buffer: &str = &secret_buffer[64..]; // * this is the encrypted hex encoded bytes
 
             // * decrypting the chunk
             let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &key) {
