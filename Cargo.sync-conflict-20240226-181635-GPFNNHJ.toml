@@ -1,0 +1,34 @@
+[package]
+name = "recs"
+version = "1.0.1"
+edition = "2021"
+authors = ["Darrion <dwhitfield@ramfield.net>"]
+
+[lib]
+name = "recs"
+path = "src/lib.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aes="0.7.5"
+base64 = "0.21.0"
+block-modes="0.8.1"
+hex = "0.4.3"
+once_cell = "1.19.0"
+hmac = "0.12.1"
+# can these two be merged ?
+rand = "0.8.5"
+rand_core = { version = "0.6", features = ["std"] }
+ring = "0.16.20"
+rpassword = "0.0.4"
+serde = { version = "1.0.126", features = ["derive"] }
+serde_json = "1.0.64"
+sha2 = "0.10"
+substring = "1.4.5"
+sysinfo = "0.28.1"
+# nix = "0.23.0"
+lazy_static = "1.4.0"
+pretty = { git = "https://github.com/Dj-Codeman/pretty.git" }
+logging = { git = "https://github.com/Dj-Codeman/logger.git" }
+system = { git = "https://github.com/Dj-Codeman/system.git" }

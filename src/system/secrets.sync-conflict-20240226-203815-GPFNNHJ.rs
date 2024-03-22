@@ -48,7 +48,6 @@ pub fn write(
     filename: String,
     secret_owner: String,
     secret_name: String,
-    fixed_key: bool,
 ) -> Result<(String, usize), RecsRecivedErrors> {
     // String is key data, The u16 is the chunk cound
     //TODO Dep or simplyfy
@@ -253,7 +252,7 @@ pub fn write(
                         match create_writing_key(match fetch_chunk_helper(num) {
                             Ok(d) => d,
                             Err(e) => return Err(e),
-                        }, fixed_key ) {
+                        }) {
                             // TODO ^ Simplyfy this. It is I/o intensive needed multiple files calls multiple times a second
                             Ok(d) => d.into(),
                             Err(e) => return Err(e),
@@ -397,7 +396,7 @@ pub fn write(
         let key_data: String = match create_writing_key(match fetch_chunk_helper(num) {
             Ok(d) => d,
             Err(e) => return Err(e),
-        }, fixed_key) {
+        }) {
             Ok(d) => d,
             Err(e) => return Err(e),
         };
@@ -438,9 +437,9 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                 SystemErrorType::ErrorOpeningFile,
-                &format!("Error while reading dummy file: {:?}", &e.to_string()),
+                &e.to_string(),
             )))
-        },
+        }
     };
 
     // encrypting the dummy file
@@ -448,7 +447,6 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
         dummy_path.to_owned(),
         dummy_owner.to_string(),
         dummy_name.to_string(),
-        true
     );
 
     match results {
@@ -564,9 +562,9 @@ pub fn read_raw(
             };
 
             // take the first spliiting chunk into signature and cipher data
-            let encoded_signature: &str = truncate(&secret_buffer, 64);
+            let encoded_signature: &str = truncate(&secret_buffer, 63);
             // ! When this inevidably fails, Remember the paddingcount() changes the sig legnth.
-            let cipher_buffer: &str = &secret_buffer[64..]; // * this is the encrypted hex encoded bytes
+            let cipher_buffer: &str = &secret_buffer[62..]; // * this is the encrypted hex encoded bytes
 
             // * decrypting the chunk
             let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &key) {
@@ -649,7 +647,6 @@ pub fn read(
     secret_owner: String,
     secret_name: String,
     owner_uid: u32,
-    fixed_key: bool,
 ) -> Result<(String, String, Vec<Option<RecsRecivedWarnings>>), RecsRecivedErrors> {
     // creating the secret json path
     match append_log(unsafe { &PROGNAME }, "Decrypting request") {
@@ -723,7 +720,7 @@ pub fn read(
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards");
 
-        let tmp_path: String = format!("/tmp/dusa_{}{:?}", temp_name, since_the_epoch.as_secs());
+        let tmp_path: String = format!("/tmp/{}{:?}", temp_name, since_the_epoch.as_secs());
         // let _ = std::fs::remove_file(&tmp_path);
         let _ = del_file(&tmp_path);     // ! do something better
 
@@ -732,7 +729,7 @@ pub fn read(
             match create_writing_key(match fetch_chunk_helper(secret_map.key) {
                 Ok(d) => d,
                 Err(e) => return Err(e),
-            }, fixed_key ) {
+            }) {
                 Ok(d) => d,
                 Err(e) => return Err(e),
             };

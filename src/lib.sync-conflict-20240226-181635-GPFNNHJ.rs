@@ -127,16 +127,15 @@ fn ensure_max_map_exists() -> Result<(), RecsRecivedErrors> {
 
 /// Insert takes a relative path encrypts and stores files. Weather or not they're deleted is based on values in the config.rs file 
 pub fn insert(filename: String, owner: String, name: String) -> Result<(), RecsRecivedErrors> {
-    match write(filename, owner, name, false) {
+    match write(filename, owner, name) {
         Ok(_) => return Ok(()),
         Err(e) => return Err(e),
     }
 }
 
-/// Retrieve starts a request to decrypt the file requested on sucess it returns where the file currently is 'String' and where to file was when it was encrypted 'String' it is up to the client to decide weather to move the file there or read the contents and delete the file
-pub fn retrive(owner: String, name: String, uid: u32) -> Result<(String, String), RecsRecivedErrors> {
-    match read(owner, name, uid, false) {
-        Ok((file_path, file_home, _)) => return Ok((file_path, file_home)), // TODO implement a handeler for warning
+pub fn retrive(owner: String, name: String) -> Result<(), RecsRecivedErrors> {
+    match read(owner, name) {
+        Ok(_) => return Ok(()),
         Err(e) => return Err(e),
     }
 }
