@@ -11,7 +11,7 @@ use substring::Substring;
 use system::truncate;
 
 use crate::{
-    array_tools::fetch_chunk,
+    // array_tools::fetch_chunk,
     config::ARRAY_LEN,
     errors::{RecsError, RecsErrorType, RecsRecivedErrors},
     PROGNAME,
@@ -81,7 +81,15 @@ pub fn encrypt(
     cipherdata.push_str(&iv);
 
     // creating hmac
-    let hmac = create_hmac(&cipherdata)?;
+    let hmac = create_hmac(
+        &cipherdata,
+        &String::from_utf8(key).map_err(|e| {
+            RecsRecivedErrors::RecsError(RecsError::new_details(
+                RecsErrorType::Error,
+                &e.to_string(),
+            ))
+        })?,
+    )?;
 
     cipherdata.push_str(&hmac);
 
@@ -104,12 +112,13 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
     let cipherdata_hmacless: &str = truncate(&cipherdata, cipherdata_len);
 
     // getting old and new hmac values
-    let old_hmac: String = cipherdata.substring(cipherdata_len, cipherdata_len + 64).to_owned();
-    let new_hmac: String = match create_hmac(cipherdata_hmacless) {
+    let old_hmac: String = cipherdata
+        .substring(cipherdata_len, cipherdata_len + 64)
+        .to_owned();
+    let new_hmac: String = match create_hmac(cipherdata_hmacless, key) {
         Ok(d) => d,
         Err(e) => return Err(e),
     };
-
 
     // verifing hmac
     match old_hmac == new_hmac {
@@ -161,16 +170,17 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
     }
 }
 
-fn create_hmac(cipherdata: &str) -> Result<String, RecsRecivedErrors> {
+fn create_hmac(cipherdata: &str, derive_key: &str) -> Result<String, RecsRecivedErrors> {
     // create hmac
     type HmacSha256 = Hmac<Sha256>;
 
     // when the hmac is verified we check aginst the systemkey
     // * in the case of the chunk being illegible we do some screening
-    let chunk_data: String = match fetch_chunk(1) {
-        Ok(d) => d,
-        Err(e) => return Err(e),
-    };
+    let chunk_data: String = derive_key.to_owned();
+    // let chunk_data: String = match fetch_chunk(1) {
+    //     Ok(d) => d,
+    //     Err(e) => return Err(e),
+    // };
 
     let mut mac = match HmacSha256::new_from_slice(chunk_data.as_bytes()) {
         Ok(d) => d,
@@ -190,7 +200,7 @@ fn create_hmac(cipherdata: &str) -> Result<String, RecsRecivedErrors> {
             dump(&hmac);
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
                 RecsErrorType::InvalidHMACSize,
-            )))
+            )));
         }
     };
 }
