@@ -1,7 +1,7 @@
-use lazy_static::lazy_static;
 use logging::append_log;
+use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
-use system::{errors::SystemError, is_path, make_dir}; // for finding free ram for vectors
+use system::{errors::SystemError, make_dir, path_present, ClonePath, PathType}; // for finding free ram for vectors
 
 use crate::{
     array::{generate_system_array, index_system_array},
@@ -12,25 +12,37 @@ use crate::{
 };
 
 // Static stuff
-pub const VERSION: &str = "R1.0.1"; // make this cooler in the future
-
-// semi static
-lazy_static! {
-    // Default rescs directory
-    #[derive(Debug)]
-    pub static ref SYSTEM_PATH: String = format!("/var/{}", unsafe { PROGNAME });
-    /// This is where the encrypted data is kept, This is just cipherdata, paths and other meta data is kept in \'META\'
-    pub static ref DATA: String = format!("{}/secrets", SYSTEM_PATH.to_owned());
-    /// The \'SYSTEM_ARRAY\' is a big string of charathers. when an encryption operation is started a section of this file is taken to combined with the USER_KEY to derive the key used in the encryption function
-    pub static ref MAPS: String = format!("{}/maps", SYSTEM_PATH.to_owned());
-    /// This folder is where the meta data used to decrypt files is kept
-    pub static ref META: String = format!("{}/meta", SYSTEM_PATH.to_owned());
-    /// This file is used in conjunction with \'USER_KEY_LOCATION\' to create the keys used for encrypting files
-    pub static ref SYSTEM_ARRAY_LOCATION: String = format!("{}/array.recs", SYSTEM_PATH.to_owned());
-    /// This is used to verify the string the system uses to derive keys from, without this file all data is ILLEGIBLE
-    pub static ref USER_KEY_LOCATION: String = format!("{}/userdata.recs", SYSTEM_PATH.to_owned());
-
+pub const VERSION: &str = "R1.0.2"; // make this cooler in the future
+#[allow(non_snake_case)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemPaths {
+    pub SYSTEM_PATH: PathType,
+    pub DATA: PathType,
+    pub MAPS: PathType,
+    pub META: PathType,
+    pub SYSTEM_ARRAY_LOCATION: PathType,
+    pub USER_KEY_LOCATION: PathType,
 }
+
+impl SystemPaths {
+    pub fn new() -> Self {
+        let system_p: PathType = PathType::Content(format!("/var/{}", unsafe { PROGNAME }));
+        // /// This is where the encrypted data is kept, This is just cipherdata, paths and other meta data is kept in \'META\'
+        // /// The \'SYSTEM_ARRAY\' is a big string of charathers. when an encryption operation is started a section of this file is taken to combined with the USER_KEY to derive the key used in the encryption function
+        // /// This folder is where the meta data used to decrypt files is kept
+        // /// This file is used in conjunction with \'USER_KEY_LOCATION\' to create the keys used for encrypting files
+        // /// This is used to verify the string the system uses to derive keys from, without this file all data is ILLEGIBLE
+        SystemPaths {
+            SYSTEM_PATH: system_p.clone_path(),
+            DATA: PathType::Content(format!("{}/secrets", system_p.clone_path())),
+            MAPS: PathType::Content(format!("{}/maps", system_p.clone_path())),
+            META: PathType::Content(format!("{}/meta", system_p.clone_path())),
+            SYSTEM_ARRAY_LOCATION: PathType::Content(format!("{}/array.recs", system_p.clone_path())),
+            USER_KEY_LOCATION: PathType::Content(format!("{}/userdata.recs", system_p.clone_path())),
+        }
+    }
+}
+
 // !  enviornment as in program
 
 pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
@@ -62,37 +74,40 @@ pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
 }
 
 // ! enviornment as in file paths
-
 fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
     // * Verifing path exists and creating missing ones
+    let system_paths: SystemPaths = SystemPaths::new();
 
-    match is_path(&SYSTEM_PATH) {
-        true => {
-            // we're ok to populate folder tree
-            let mut paths = vec![];
-            paths.insert(0, DATA.clone());
-            paths.insert(1, MAPS.clone());
-            paths.insert(2, META.clone());
-
-            for path in paths.iter() {
-                let _ = match make_dir(path) {
-                    Ok(_) => match debug {
-                        true => {
-                            append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path))
-                        }
-                        false => Ok(()),
-                    },
-                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-                };
+    match path_present(&system_paths.SYSTEM_PATH) {
+        Ok(b) => match b {
+            true => {
+                // we're ok to populate folder tree
+                let mut paths: Vec<PathType> = vec![];
+                paths.insert(0, system_paths.DATA.clone());
+                paths.insert(1, system_paths.MAPS.clone());
+                paths.insert(2, system_paths.META.clone());
+    
+                for path in paths.iter() {
+                    let _ = match make_dir(path.clone_path()) {
+                        Ok(_) => match debug {
+                            true => {
+                                append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path))
+                            }
+                            false => Ok(()),
+                        },
+                        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                    };
+                }
             }
-        }
-        false => {
-            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                system::errors::SystemErrorType::ErrorCreatingFile,
-                "SYSTEM_PATH is missing",
-            )))
-        }
-    };
+            false => {
+                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                    system::errors::SystemErrorType::ErrorCreatingFile,
+                    "SYSTEM_PATH is missing",
+                )))
+            }
+        },
+        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+    }
     Ok(())
 }
 

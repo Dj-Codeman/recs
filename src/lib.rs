@@ -14,10 +14,10 @@ mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
 use errors::RecsRecivedErrors;
-use local_env::SYSTEM_ARRAY_LOCATION;
+use local_env::VERSION;
 use logging::append_log;
 use secret::{read_raw, write_raw};
-use system::{create_hash, del_file, is_path};
+use system::{create_hash, del_file, path_present, ClonePath, PathType};
 
 use std::{
     fs::{File, OpenOptions},
@@ -28,14 +28,14 @@ use crate::{
     array::{index_system_array, ChunkMap},
     array_tools::fetch_chunk,
     config::{ARRAY_LEN, CHUNK_SIZE},
-    local_env::{set_system, MAPS, META, VERSION},
+    local_env::{set_system, SystemPaths},
     secret::{forget, read, write},
 };
 
 /// Debugging should be set while initializing the lib, If no defined the default is disabled
 pub static mut DEBUGGING: Option<bool> = None;
 
-/// This value is set by set_prog it is used for logging creating paths and other functions. to handel its creation or modification use set_prog() to avoid wrapping 
+/// This value is set by set_prog it is used for logging creating paths and other functions. to handel its creation or modification use set_prog() to avoid wrapping
 pub static mut PROGNAME: &str = "";
 
 /// Changes some mandatory logging functions and enables longer outputs in logs
@@ -49,7 +49,7 @@ pub fn set_debug(option: bool) {
 
 /// This function handels setting the PROGNAME variables
 pub fn set_prog(data: &'static str) {
-	unsafe { PROGNAME = data };
+    unsafe { PROGNAME = data };
 }
 
 /// Initialize checks the progname, and debugging values snf ensure the lib is ready to function
@@ -90,7 +90,8 @@ pub fn initialize() -> Result<(), RecsRecivedErrors> {
 }
 
 fn ensure_system_path(prog: &str, debug: bool) -> Result<(), RecsRecivedErrors> {
-    match is_path(&SYSTEM_ARRAY_LOCATION) {
+    let system_paths: SystemPaths = SystemPaths::new();
+    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION).map_err(|e| RecsRecivedErrors::SystemError(e))? {
         true => (), // Nothing needs to be done the lib with this name has  already been initialized
         false => {
             match append_log(
@@ -111,10 +112,11 @@ fn ensure_system_path(prog: &str, debug: bool) -> Result<(), RecsRecivedErrors> 
 }
 
 fn ensure_max_map_exists() -> Result<(), RecsRecivedErrors> {
+    let system_paths: SystemPaths = SystemPaths::new();
     let max_map = ARRAY_LEN / CHUNK_SIZE;
-    let max_map_path = format!("{}/{}.map", *MAPS, max_map - 1);
+    let max_map_path = PathType::Content(format!("{}/{}.map", system_paths.MAPS, max_map - 1));
 
-    match is_path(&max_map_path) {
+    match path_present(&max_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
         true => return Ok(()),
         false => match index_system_array() {
             Ok(_) => return Ok(()),
@@ -125,8 +127,8 @@ fn ensure_max_map_exists() -> Result<(), RecsRecivedErrors> {
 
 // Normal actions
 
-/// Insert takes a relative path encrypts and stores files. Weather or not they're deleted is based on values in the config.rs file 
-pub fn insert(filename: String, owner: String, name: String) -> Result<(), RecsRecivedErrors> {
+/// Insert takes a relative path encrypts and stores files. Weather or not they're deleted is based on values in the config.rs file
+pub fn insert(filename: PathType, owner: String, name: String) -> Result<(), RecsRecivedErrors> {
     match write(filename, owner, name, false) {
         Ok(_) => return Ok(()),
         Err(e) => return Err(e),
@@ -134,7 +136,11 @@ pub fn insert(filename: String, owner: String, name: String) -> Result<(), RecsR
 }
 
 /// Retrieve starts a request to decrypt the file requested on sucess it returns where the file currently is 'String' and where to file was when it was encrypted 'String' it is up to the client to decide weather to move the file there or read the contents and delete the file
-pub fn retrive(owner: String, name: String, uid: u32) -> Result<(String, String), RecsRecivedErrors> {
+pub fn retrive(
+    owner: String,
+    name: String,
+    uid: u32,
+) -> Result<(PathType, PathType), RecsRecivedErrors> {
     match read(owner, name, uid, false) {
         Ok((file_path, file_home, _)) => return Ok((file_path, file_home)), // TODO implement a handeler for warning
         Err(e) => return Err(e),
@@ -148,9 +154,15 @@ pub fn remove(owner: String, name: String) -> Result<(), RecsRecivedErrors> {
     }
 }
 
-pub fn ping(owner: String, name: String) -> bool {
-    let secret_map_path = format!("{}/{owner}-{name}.meta", *META, owner = owner, name = name);
-    is_path(&secret_map_path)
+pub fn ping(owner: String, name: String) -> Result<bool, RecsRecivedErrors> {
+    let system_paths: SystemPaths = SystemPaths::new();
+    let secret_map_path = PathType::Content(format!(
+        "{}/{owner}-{name}.meta",
+        system_paths.META,
+        owner = owner,
+        name = name
+    ));
+    path_present(&secret_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))
 }
 
 pub fn encrypt_raw(data: String) -> Result<(String, String, usize), RecsRecivedErrors> {
@@ -171,9 +183,11 @@ pub fn decrypt_raw(
     }
 }
 
-pub fn update_map(map_num: u32) -> bool { // Add a result to return errors from this
+pub fn update_map(map_num: u32) -> bool {
+    let system_paths: SystemPaths = SystemPaths::new();
+    // Add a result to return errors from this
     // ? Getting the current map data
-    let map_path: String = format!("{}/chunk_{}.map", *MAPS, map_num);
+    let map_path: PathType = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
 
     // ? Reading the map
     let mut map_file = File::open(&map_path).expect("File could not be opened");
@@ -200,7 +214,10 @@ pub fn update_map(map_num: u32) -> bool { // Add a result to return errors from 
     };
 
     if new_hash == None {
-        let _ = append_log( unsafe { &PROGNAME }, &format!("Failed to fetch chunk data for number {}", &map_num));
+        let _ = append_log(
+            unsafe { &PROGNAME },
+            &format!("Failed to fetch chunk data for number {}", &map_num),
+        );
     }
 
     //  making new map
@@ -214,7 +231,7 @@ pub fn update_map(map_num: u32) -> bool { // Add a result to return errors from 
     };
 
     // write the new map file
-    let _ = del_file(&map_path);
+    let _ = del_file(map_path.clone_path());
     let updated_map = serde_json::to_string_pretty(&new_map).unwrap();
 
     let mut map_file = OpenOptions::new()
@@ -234,7 +251,7 @@ pub fn update_map(map_num: u32) -> bool { // Add a result to return errors from 
 
 #[test]
 fn ping_check() {
-    let result = ping(unsafe { PROGNAME.to_owned() }, "dummy".to_string());
+    let result = ping(unsafe { PROGNAME.to_owned() }, "dummy".to_string()).unwrap();
     assert_eq!(result, false);
 }
 

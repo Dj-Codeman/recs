@@ -7,12 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
     io::{prelude::*, SeekFrom, Write},
-    path::Path,
 };
 use system::{
-    create_hash, del_dir, del_file,
-    errors::{SystemError, SystemErrorType},
-    is_path, truncate,
+    create_hash, del_dir, del_file, errors::{SystemError, SystemErrorType}, path_present, truncate, ClonePath, PathType
 };
 
 // self and create are user made code
@@ -25,7 +22,7 @@ use crate::{
         RecsError, RecsErrorType, RecsRecivedErrors, RecsRecivedWarnings, RecsWarning,
         RecsWarningType,
     },
-    local_env::{calc_buffer, DATA, META, VERSION},
+    local_env::{calc_buffer, SystemPaths, VERSION},
     DEBUGGING, PROGNAME,
 };
 
@@ -37,15 +34,15 @@ struct SecretDataIndex {
     owner: String,
     key: u32,
     unique_id: String,
-    file_path: String,
-    secret_path: String,
+    file_path: PathType,
+    secret_path: PathType,
     buffer_size: usize,
     chunk_count: usize,
     full_file_hash: String,
 }
 
 pub fn write(
-    filename: String,
+    filename: PathType,
     secret_owner: String,
     secret_name: String,
     fixed_key: bool,
@@ -94,27 +91,31 @@ pub fn write(
         }
     };
 
-    warn(&filename);
+    warn(&filename.to_string());
+    let system_paths: SystemPaths = SystemPaths::new();
+
 
     // testing if the file exists
-    let filename_existence: bool = is_path(&filename);
+    let filename_existence: bool = path_present(&filename).unwrap();
 
     if filename_existence {
         // creating the encrypted meta data file
-        let secret_map_path: String = format!("{}/{}-{}.meta", *META, secret_owner, secret_name);
+        let secret_map_path: PathType =
+            PathType::Content(format!("{}/{}-{}.meta", system_paths.META, secret_owner, secret_name));
 
         // ? picking a chunk number
         let upper_limit: u32 = array_arimitics();
         let lower_limit: u32 = 1;
 
-        let mut rng = rand::thread_rng();
-        let range = Uniform::new(lower_limit, upper_limit);
-        let num = range.sample(&mut rng);
+        let mut rng: rand::prelude::ThreadRng = rand::thread_rng();
+        let range: Uniform<u32> = Uniform::new(lower_limit, upper_limit);
+        let num: u32 = range.sample(&mut rng);
 
         // creating the rest of the struct data
-        let unique_id: String = truncate(&encode(create_hash(filename.clone())), 20).to_string();
-        let canon_path: String = match canonicalize(&filename) {
-            Ok(d) => d.display().to_string(),
+        let unique_id: String =
+            truncate(&encode(create_hash(filename.to_string())), 20).to_string();
+        let canon_path: PathType = match canonicalize(&filename) {
+            Ok(d) => PathType::PathBuf(d),
             Err(e) => {
                 return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                     system::errors::SystemErrorType::ErrorReadingFile,
@@ -124,12 +125,12 @@ pub fn write(
         };
 
         // create the secret path
-        let secret_path: String = format!("{}/{}.recs", *DATA, unique_id);
+        let secret_path: PathType = PathType::Content(format!("{}/{}.recs", system_paths.DATA, unique_id));
 
         // Determining chunk amount and size
         let chunk_count: usize = file_size as usize / buffer_size;
         // make a hash
-        let full_file_hash: String = create_hash(filename.clone());
+        let full_file_hash: String = create_hash(filename.to_string());
 
         // Creating the struct
         let secret_data_struct: SecretDataIndex = SecretDataIndex {
@@ -155,7 +156,7 @@ pub fn write(
                 )))
             }
         };
-        let cipher_data_map = match encrypt(
+        let cipher_data_map: String = match encrypt(
             pretty_data_map,
             match fetch_chunk_helper(1) {
                 Ok(d) => d.into(),
@@ -250,10 +251,13 @@ pub fn write(
                     // * Running the actual encryption
                     let secret_buffer = match encrypt(
                         encoded_buffer.as_bytes().to_vec(),
-                        match create_writing_key(match fetch_chunk_helper(num) {
-                            Ok(d) => d,
-                            Err(e) => return Err(e),
-                        }, fixed_key ) {
+                        match create_writing_key(
+                            match fetch_chunk_helper(num) {
+                                Ok(d) => d,
+                                Err(e) => return Err(e),
+                            },
+                            fixed_key,
+                        ) {
                             // TODO ^ Simplyfy this. It is I/o intensive needed multiple files calls multiple times a second
                             Ok(d) => d.into(),
                             Err(e) => return Err(e),
@@ -394,10 +398,13 @@ pub fn write(
         };
 
         // resolving the key data
-        let key_data: String = match create_writing_key(match fetch_chunk_helper(num) {
-            Ok(d) => d,
-            Err(e) => return Err(e),
-        }, fixed_key) {
+        let key_data: String = match create_writing_key(
+            match fetch_chunk_helper(num) {
+                Ok(d) => d,
+                Err(e) => return Err(e),
+            },
+            fixed_key,
+        ) {
             Ok(d) => d,
             Err(e) => return Err(e),
         };
@@ -416,13 +423,15 @@ pub fn write(
 
 pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedErrors> {
     // Key_Data Cipher_Data Chunk_Count
-    let dummy_path: &str = "/tmp/dummy.recs";
+    let dummy_path: PathType = PathType::Str("/tmp/dummy.recs".into());
     let dummy_owner: &str = "owner";
     let dummy_name: &str = "temp";
     // write the data to the file
+    let system_paths: SystemPaths = SystemPaths::new();
+
 
     // ! making the secret path to append data too
-    let mut dummy_file: File = match File::create(dummy_path) {
+    let mut dummy_file: File = match File::create(dummy_path.clone_path()) {
         Ok(f) => f,
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -440,15 +449,15 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
                 SystemErrorType::ErrorOpeningFile,
                 &format!("Error while reading dummy file: {:?}", &e.to_string()),
             )))
-        },
+        }
     };
 
     // encrypting the dummy file
     let results: Result<(String, usize), RecsRecivedErrors> = write(
-        dummy_path.to_owned(),
+        dummy_path,
         dummy_owner.to_string(),
         dummy_name.to_string(),
-        true
+        true,
     );
 
     match results {
@@ -456,10 +465,10 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
             // got the key now get the cipher data
             let key: String = data;
             // finding the dummy map
-            let secret_map_path: String = format!("{}/{}-{}.meta", *META, dummy_owner, dummy_name);
-            // let secret_json_existence: bool = Path::new(&secret_map_path).exists();
+            let secret_map_path: PathType =
+                PathType::Content(format!("{}/{}-{}.meta", system_paths.META, dummy_owner, dummy_name));
             // decrypting and reading
-            let cipher_map_data = match read_to_string(secret_map_path) {
+            let cipher_map_data: String = match read_to_string(secret_map_path) {
                 Ok(d) => d,
                 Err(e) => {
                     return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -473,7 +482,7 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
                 Err(e) => return Err(e),
             };
 
-            let secret_map_data = match decrypt(&cipher_map_data, &key_data) {
+            let secret_map_data: Vec<u8> = match decrypt(&cipher_map_data, &key_data) {
                 Ok(d) => d,
                 Err(e) => return Err(e),
             };
@@ -492,15 +501,22 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
                 };
             // pulling info from the map
             // ensure the data is there
-            if !is_path(&secret_map.secret_path) {
-                let _ = append_log(
-                    unsafe { &PROGNAME },
-                    "THE DATA FILE SPECIFIED DOES NOT EXIST",
-                );
-                return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                    RecsErrorType::Error,
-                )));
+            match path_present(&secret_map.secret_path) {
+                Ok(b) => match b {
+                    true => (),
+                    false => {
+                        let _ = append_log(
+                            unsafe { &PROGNAME },
+                            "THE DATA FILE SPECIFIED DOES NOT EXIST",
+                        );
+                        return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                            RecsErrorType::Error,
+                        )));
+                    },
+                },
+                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
             }
+
 
             // reading and printing the file
             let recs_data: String = match read_to_string(&secret_map.secret_path) {
@@ -650,15 +666,16 @@ pub fn read(
     secret_name: String,
     owner_uid: u32,
     fixed_key: bool,
-) -> Result<(String, String, Vec<Option<RecsRecivedWarnings>>), RecsRecivedErrors> {
+) -> Result<(PathType, PathType, Vec<Option<RecsRecivedWarnings>>), RecsRecivedErrors> {
     // creating the secret json path
     match append_log(unsafe { &PROGNAME }, "Decrypting request") {
         Ok(_) => (),
         Err(e) => return Err(RecsRecivedErrors::repack(e)),
     };
-    let secret_map_path = format!("{}/{}-{}.meta", *META, secret_owner, secret_name);
+    let system_paths: SystemPaths = SystemPaths::new();
+    let secret_map_path: PathType = PathType::Content(format!("{}/{}-{}.meta", system_paths.META, secret_owner, secret_name));
 
-    let secret_json_existence: bool = Path::new(&secret_map_path).exists();
+    let secret_json_existence: bool = secret_map_path.to_path_buf().exists();
     if secret_json_existence {
         let cipher_map_data: String =
             read_to_string(secret_map_path).expect("Couldn't read the map file");
@@ -707,35 +724,43 @@ pub fn read(
 
         // Creating a temp filename to write the data too so we can change the owner and
         // ensure the data is there
-        let temp_name: String = match is_path(&secret_map.secret_path) { // This ensure the tmp path are more likely to be unique
-            true => truncate(&create_hash(secret_map.secret_path.clone())[5..], 10).to_owned(),
-            false => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                    RecsErrorType::InvalidFile,
-                )))
-            }
+        let temp_name: String = match path_present(&secret_map.secret_path) {
+            Ok(b) => match b {
+                // This ensure the tmp path are more likely to be unique
+                true => truncate(&create_hash(secret_map.secret_path.to_string())[5..], 10).to_owned(),
+                false => {
+                    return Err(RecsRecivedErrors::RecsError(RecsError::new(
+                        RecsErrorType::InvalidFile,
+                    )))
+                }
+            },
+            Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
         };
 
         // really dumb way to get random int
         use std::time::{SystemTime, UNIX_EPOCH};
         let start = SystemTime::now();
         let since_the_epoch = start
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
 
-        let tmp_path: String = format!("/tmp/dusa_{}{:?}", temp_name, since_the_epoch.as_secs());
-        // let _ = std::fs::remove_file(&tmp_path);
-        let _ = del_file(&tmp_path);     // ! do something better
+        let tmp_path: PathType = PathType::Content(format!("/tmp/dusa_{}{:?}", temp_name, since_the_epoch.as_secs()));
+        match del_file(tmp_path.clone_path()) {
+            Ok(_) => (),
+            Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+        };
 
         // generating the secret key for the file
-        let writting_key: String =
-            match create_writing_key(match fetch_chunk_helper(secret_map.key) {
+        let writting_key: String = match create_writing_key(
+            match fetch_chunk_helper(secret_map.key) {
                 Ok(d) => d,
                 Err(e) => return Err(e),
-            }, fixed_key ) {
-                Ok(d) => d,
-                Err(e) => return Err(e),
-            };
+            },
+            fixed_key,
+        ) {
+            Ok(d) => d,
+            Err(e) => return Err(e),
+        };
 
         // Create chunk map from sig
         // ! this has to be modified to account for the second end byte
@@ -965,11 +990,12 @@ pub fn read(
 pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsRecivedErrors> {
     // creating the secret json file
     let _ = append_log(unsafe { &PROGNAME }, "Forgetting secret");
-    let secret_map_path = format!("{}/{}-{}.meta", *META, secret_owner, secret_name);
+    let system_paths: SystemPaths = SystemPaths::new();
+    let secret_map_path = PathType::Content(format!("{}/{}-{}.meta", system_paths.META, secret_owner, secret_name));
 
     // testing if the secret json exists before starting encryption
-    if is_path(&secret_map_path) {
-        let cipher_map_data = match read_to_string(&secret_map_path) {
+    if path_present(&secret_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
+        let cipher_map_data: String = match read_to_string(&secret_map_path) {
             Ok(d) => d,
             Err(e) => {
                 return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
@@ -998,33 +1024,13 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
             }
         };
 
-        // the config
-        // if LEAVE_IN_PEACE {
-        // match read(secret_owner, secret_name) {
-        // Ok(_) => (),
-        // Err(e) => return Err(e),
-        // };
-
-        //deleted secret data
-        // if is_path(&secret_map.secret_path) {
-        // match del_file(&secret_map.secret_path) {
-        // Ok(_) => (),
-        // Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-        // };
-        // }
-        // match del_file(&secret_map_path) {
-        // Ok(_) => (),
-        // Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-        // };
-        // } else {
-        // deleted secret data
-        if is_path(&secret_map.secret_path) {
-            match del_file(&secret_map.secret_path) {
+        if path_present(&secret_map.secret_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
+            match del_file(secret_map.secret_path) {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
             };
         }
-        match del_file(&secret_map_path) {
+        match del_file(secret_map_path.clone_path()) {
             Ok(_) => {
                 _ = append_log(
                     unsafe { PROGNAME },
@@ -1033,7 +1039,6 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
             }
             Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
         };
-        // }
 
         return Ok(());
     } else {
@@ -1043,7 +1048,7 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
         };
         return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
             RecsErrorType::Error,
-            "The requested file doesn't exist"
+            "The requested file doesn't exist",
         )));
     }
 }

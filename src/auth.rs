@@ -1,5 +1,6 @@
 use hex;
 use logging::append_log;
+use pretty::notice;
 // use rand::distributions::{Distribution, Uniform};
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
@@ -8,14 +9,14 @@ use std::{
     io::Write,
     str,
 };
-use system::{create_hash, del_file, errors::SystemError, is_path};
+use system::{create_hash, del_file, errors::SystemError, path_present, ClonePath, PathType};
 
 use crate::{
     array::array_arimitics,
     array_tools::fetch_chunk,
     encrypt::{decrypt, encrypt},
     errors::{RecsError, RecsErrorType, RecsRecivedErrors},
-    local_env::{MAPS, USER_KEY_LOCATION, VERSION},
+    local_env::{SystemPaths, VERSION},
     PROGNAME,
 };
 
@@ -83,25 +84,36 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         Ok(d) => d,
         Err(e) => return Err(e),
     };
-    // ! ^ this will use a static buffer size
 
-    if is_path(&USER_KEY_LOCATION) {
-        match debug {
-            true => {
-                match del_file(&USER_KEY_LOCATION) {
-                    Ok(_) => (),
-                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-                };
-                match append_log(unsafe { &PROGNAME }, "The old userkey has been deleted") {
-                    Ok(_) => (),
-                    Err(e) => return Err(RecsRecivedErrors::repack(e)),
+    let system_paths: SystemPaths = SystemPaths::new();
+
+    match path_present(&system_paths.USER_KEY_LOCATION) {
+        Ok(d) => match d {
+            true => match debug {
+                true => {
+                    match del_file(system_paths.USER_KEY_LOCATION.clone_path()) {
+                        Ok(_) => {
+                            notice(&format!("{}: deleted", system_paths.USER_KEY_LOCATION.to_string()));
+                            let _ = append_log(unsafe { &PROGNAME }, "The old userkey has been deleted");
+                        }
+                        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                    };
                 }
-            }
-            false => match del_file(&USER_KEY_LOCATION) {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                false => {
+                    match del_file(system_paths.USER_KEY_LOCATION.clone_path()) {
+                        Ok(_) => (),
+                        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                    };
+                }
             },
-        };
+            false => {
+                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
+                    system::errors::SystemErrorType::ErrorDeletingFile,
+                    &system_paths.USER_KEY_LOCATION.to_string(),
+                )))
+            }
+        },
+        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
     }
 
     // creating the master.json file
@@ -109,7 +121,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         .create_new(true)
         .write(true)
         .append(true)
-        .open(&*USER_KEY_LOCATION)
+        .open(&system_paths.USER_KEY_LOCATION)
     {
         Ok(d) => d,
         Err(e) => {
@@ -156,18 +168,18 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         hash: String::from(checksum_string),
         parent: String::from("SELF"),
         version: String::from(VERSION),
-        location: (&USER_KEY_LOCATION).to_string(),
+        location: (&system_paths.USER_KEY_LOCATION).to_string(),
         key: 0,
     };
 
     // formatting the json data
-    let pretty_userkey_map = serde_json::to_string_pretty(&userkey_map_data).unwrap();
+    let pretty_userkey_map: String = serde_json::to_string_pretty(&userkey_map_data).unwrap();
 
     // creating the json path
-    let userkey_map_path = format!("{}/userkey.map", *MAPS);
+    let userkey_map_path: PathType = PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
 
     // Deleting and recreating the json file
-    let _ = match del_file(&userkey_map_path) {
+    let _ = match del_file(userkey_map_path.clone_path()) {
         Ok(_) => match debug {
             true => append_log(unsafe { &PROGNAME }, "Deleting old usrkey if it exists"),
             false => Ok(()),
@@ -203,7 +215,10 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
             return Ok(());
         }
         Err(e) => {
-            let _ = append_log(unsafe { &PROGNAME }, &format!("Could save map data to file: {}", e));
+            let _ = append_log(
+                unsafe { &PROGNAME },
+                &format!("Could save map data to file: {}", e),
+            );
             return Err(RecsRecivedErrors::SystemError(SystemError::new(
                 system::errors::SystemErrorType::ErrorOpeningFile,
             )));
@@ -212,6 +227,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
 }
 
 pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
+    let system_paths: SystemPaths = SystemPaths::new();
     let _ = append_log(
         unsafe { &PROGNAME },
         "user key authentication request started",
@@ -254,7 +270,7 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
     let userkey = hex::encode(&password_key);
     let secret: String = "The hotdog man isn't real !?".to_string();
     // ! make the read the userkey from the map in the future
-    let verification_ciphertext: String = match read_to_string(&*USER_KEY_LOCATION) {
+    let verification_ciphertext: String = match read_to_string(&system_paths.USER_KEY_LOCATION) {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -264,11 +280,11 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
         }
     };
 
-    let verification_result: String =
-        match decrypt(&verification_ciphertext.to_string(), &userkey) {
-            Ok(d) => String::from_utf8_lossy(&d).to_string(),
-            Err(e) => return Err(e),
-        };
+    let verification_result: String = match decrypt(&verification_ciphertext.to_string(), &userkey)
+    {
+        Ok(d) => String::from_utf8_lossy(&d).to_string(),
+        Err(e) => return Err(e),
+    };
 
     match verification_result == secret {
         true => return Ok(userkey),

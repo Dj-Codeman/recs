@@ -1,6 +1,7 @@
 use logging::append_log;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
+use system::PathType;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use system::create_hash;
@@ -11,9 +12,9 @@ use crate::config::CHUNK_SIZE;
 use crate::errors::RecsError;
 use crate::errors::RecsErrorType;
 use crate::errors::RecsRecivedErrors;
-use crate::local_env::{MAPS, VERSION};
+use crate::local_env::SystemPaths;
+use crate::local_env::VERSION;
 use crate::PROGNAME;
-use crate::SYSTEM_ARRAY_LOCATION;
 
 pub fn fetch_chunk(num: u32) -> Result<String, RecsRecivedErrors> {
     let upper_limit = array_arimitics();
@@ -32,7 +33,8 @@ pub fn fetch_chunk(num: u32) -> Result<String, RecsRecivedErrors> {
 }
 
 fn fetch_chunk_by_number(map_num: u32) -> Result<String, RecsRecivedErrors> {
-    let map_path = format!("{}/chunk_{}.map", *MAPS, map_num);
+    let system_paths: SystemPaths = SystemPaths::new();
+    let map_path: PathType = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
 
     // if data is return then we verify it
     match read_map_data(&map_path) {
@@ -61,7 +63,7 @@ fn fetch_chunk_by_number(map_num: u32) -> Result<String, RecsRecivedErrors> {
     };
 }
 
-fn read_map_data(map_path: &str) -> Result<String, RecsRecivedErrors> {
+fn read_map_data(map_path: &PathType) -> Result<String, RecsRecivedErrors> {
     // Get the file ref from the os if it exists
     let mut map_file: File = match File::open(map_path) {
         Ok(d) => d,
@@ -115,13 +117,14 @@ fn verify_map_version(pretty_map_data: &ChunkMap) -> Result<(), RecsRecivedError
 }
 
 fn read_chunk_data(pretty_map_data: &ChunkMap) -> Result<String, RecsRecivedErrors> {
+    let system_paths: SystemPaths = SystemPaths::new();
     let chunk_start = pretty_map_data.chunk_beg;
     let chunk_end = pretty_map_data.chunk_end;
     let mut buffer = vec![0; CHUNK_SIZE as usize];
 
     // #[allow(unused_assignments)] // * cheap fix
     let mut _chunk = String::new(); // TODO make an array or something for this val
-    let mut file = match File::open(SYSTEM_ARRAY_LOCATION.to_string()) {
+    let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION) {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(

@@ -5,19 +5,19 @@ use std::{
     io::{prelude::*, SeekFrom, Write},
     str,
 };
-use system::{create_hash, del_dir, del_file, errors::SystemError, is_path};
+use system::{create_hash, del_dir, del_file, errors::SystemError, path_present, ClonePath, PathType};
 
 use crate::{
     config::{ARRAY_LEN, CHUNK_SIZE},
     encrypt::create_secure_chunk,
     errors::{RecsError, RecsErrorType, RecsRecivedErrors},
-    local_env::{MAPS, SYSTEM_ARRAY_LOCATION, VERSION},
+    local_env::{SystemPaths, VERSION},
     PROGNAME,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChunkMap {
-    pub location: String,
+    pub location: PathType,
     pub version: String,
     pub chunk_num: u32,
     pub chunk_hsh: String,
@@ -38,13 +38,14 @@ pub fn array_arimitics() -> u32 {
 }
 
 pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
+    let system_paths: SystemPaths = SystemPaths::new();
     match append_log(unsafe { &PROGNAME }, "Creating system array") {
         Ok(_) => (),
         Err(e) => return Err(RecsRecivedErrors::repack(e)),
     };
 
     // Remove the existing system array directory
-    let _ = del_dir(&SYSTEM_ARRAY_LOCATION);
+    let _ = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION);
 
     // Create the system array contents
     let system_array_contents = create_system_array_contents();
@@ -82,11 +83,12 @@ fn create_system_array_contents() -> String {
 }
 
 fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
+    let system_paths: SystemPaths = SystemPaths::new();
     let mut system_array_file = OpenOptions::new()
         .create_new(true)
         .write(true)
         .append(true)
-        .open(SYSTEM_ARRAY_LOCATION.to_owned())
+        .open(system_paths.SYSTEM_ARRAY_LOCATION.to_owned())
         .map_err(|e| {
             let _ = append_log(unsafe { &PROGNAME }, &e.to_string());
             RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -112,10 +114,11 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
     let mut chunk_number: u32 = 1;
     let mut range_start: u32 = BEG_CHAR;
     let mut range_end: u32 = BEG_CHAR + CHUNK_SIZE as u32;
+    let system_paths: SystemPaths = SystemPaths::new();
     #[allow(unused_assignments)] // * cheap fix
     let mut chunk: String = String::new();
 
-    let mut file = match File::open(SYSTEM_ARRAY_LOCATION.to_string()) {
+    let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION.to_string()) {
         Ok(d) => d,
         Err(e) => {
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -154,7 +157,7 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                 let chunk_hash = create_hash(chunk);
 
                 let chunk_map = ChunkMap {
-                    location: SYSTEM_ARRAY_LOCATION.to_string(),
+                    location: system_paths.SYSTEM_ARRAY_LOCATION.clone_path(),
                     version: VERSION.to_string(),
                     chunk_hsh: chunk_hash.to_string(),
                     chunk_num: chunk_number,
@@ -162,10 +165,10 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                     chunk_end: range_end,
                 };
 
-                let chunk_map_path = format!("{}/chunk_{}.map", *MAPS, chunk_number);
+                let chunk_map_path: PathType = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
 
-                if is_path(&chunk_map_path) {
-                    match del_file(&chunk_map_path) {
+                if path_present(&chunk_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
+                    match del_file(chunk_map_path.clone_path()) {
                         Ok(_) => (),
                         Err(e) => return Err(RecsRecivedErrors::repack(MyErrors::SystemError(e))),
                     };
@@ -234,12 +237,12 @@ mod tests {
 
     // Mock functions or constants for testing
     // const PROGNAME: &str = "TEST_PROG";
-    const VERSION: &str = "1.0.0"; // Adjust the version as needed
+    const VERSION: &str = "R1.0.2"; // Adjust the version as needed
 
     #[test]
     fn test_create_system_array_contents() {
-        let expected_header = format!("<!--REcS System Array Version {}-->\n", VERSION);
-        let expected_footer = "\n</--REcS System Array-->";
+        let expected_header = format!("<--REcS Array Version {}-->\n", VERSION);
+        let expected_footer = "\n</--REcS Array-->";
 
         let result = create_system_array_contents();
 
