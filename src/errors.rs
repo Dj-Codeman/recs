@@ -122,6 +122,7 @@ pub enum RecsErrorType {
 pub enum RecsWarningType {
     OutdatedVersion,
     MisAlignedChunk,
+    FileNotDeleted
 }
 
 // pretty display
@@ -208,7 +209,7 @@ impl RecsWarning {
         match &self.kind {
             RecsWarningType::OutdatedVersion => String::from("The signature data indicates an older version of recs or encore was used to write this."),
             RecsWarningType::MisAlignedChunk => String::from("While decrypting the signature counts are mis-aligned, Check hash of returned data to ensure integrity"),
-
+            RecsWarningType::FileNotDeleted => String::from("Error while deleting a file, most likely safe to ignore"),
         }
     }
 }
