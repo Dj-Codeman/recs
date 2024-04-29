@@ -80,19 +80,19 @@ impl RecsRecivedErrors {
 //     // Handeles all types of custom errors passed to it. They will display to the sdin I think
 // }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RecsError {
     pub kind: RecsErrorType,
     pub details: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RecsWarning {
     pub kind: RecsWarningType,
     pub details: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RecsErrorType {
     Error,
     InitializationError,
@@ -118,7 +118,7 @@ pub enum RecsErrorType {
     InvalidFile,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RecsWarningType {
     OutdatedVersion,
     MisAlignedChunk,
