@@ -12,7 +12,9 @@ use crate::{
 };
 
 // Static stuff
-pub const VERSION: &str = "R1.0.2"; // make this cooler in the future
+
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemPaths {
@@ -37,8 +39,14 @@ impl SystemPaths {
             DATA: PathType::Content(format!("{}/secrets", system_p.clone_path())),
             MAPS: PathType::Content(format!("{}/maps", system_p.clone_path())),
             META: PathType::Content(format!("{}/meta", system_p.clone_path())),
-            SYSTEM_ARRAY_LOCATION: PathType::Content(format!("{}/array.recs", system_p.clone_path())),
-            USER_KEY_LOCATION: PathType::Content(format!("{}/userdata.recs", system_p.clone_path())),
+            SYSTEM_ARRAY_LOCATION: PathType::Content(format!(
+                "{}/array.recs",
+                system_p.clone_path()
+            )),
+            USER_KEY_LOCATION: PathType::Content(format!(
+                "{}/userdata.recs",
+                system_p.clone_path()
+            )),
         }
     }
 }
@@ -57,7 +65,7 @@ pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
         Ok(_) => {
             let _ = match index_system_array() {
                 Ok(_) => append_log(
-                    unsafe { &PROGNAME },
+                    unsafe { PROGNAME },
                     "System array has been created and indexed",
                 ),
 
@@ -86,13 +94,14 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
                 paths.insert(0, system_paths.DATA.clone());
                 paths.insert(1, system_paths.MAPS.clone());
                 paths.insert(2, system_paths.META.clone());
-    
+
                 for path in paths.iter() {
                     let _ = match make_dir(path.clone_path()) {
                         Ok(_) => match debug {
-                            true => {
-                                append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path))
-                            }
+                            true => append_log(
+                                unsafe { PROGNAME },
+                                &format!("Path : {} created", &path),
+                            ),
                             false => Ok(()),
                         },
                         Err(e) => return Err(RecsRecivedErrors::SystemError(e)),

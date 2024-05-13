@@ -36,7 +36,7 @@ use crate::{
 pub static mut DEBUGGING: Option<bool> = None;
 
 /// This value is set by set_prog it is used for logging creating paths and other functions. to handel its creation or modification use set_prog() to avoid wrapping
-pub static mut PROGNAME: &str = "";
+pub static mut PROGNAME: &'static str = "";
 
 /// Changes some mandatory logging functions and enables longer outputs in logs
 pub fn set_debug(option: bool) {
@@ -71,12 +71,12 @@ pub fn initialize() -> Result<(), RecsRecivedErrors> {
         false => false,
     };
 
-    match append_log(unsafe { &PROGNAME }, "RECS STARTED") {
+    match append_log(unsafe { PROGNAME }, "RECS STARTED") {
         Ok(_) => (),
         Err(e) => return Err(RecsRecivedErrors::repack(e)),
     };
 
-    match ensure_system_path(unsafe { &PROGNAME }, debug) {
+    match ensure_system_path(unsafe { PROGNAME }, debug) {
         Ok(_) => (),
         Err(e) => return Err(e),
     };
@@ -91,7 +91,9 @@ pub fn initialize() -> Result<(), RecsRecivedErrors> {
 
 fn ensure_system_path(prog: &str, debug: bool) -> Result<(), RecsRecivedErrors> {
     let system_paths: SystemPaths = SystemPaths::new();
-    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION).map_err(|e| RecsRecivedErrors::SystemError(e))? {
+    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION)
+        .map_err(|e| RecsRecivedErrors::SystemError(e))?
+    {
         true => (), // Nothing needs to be done the lib with this name has  already been initialized
         false => {
             match append_log(
@@ -187,7 +189,8 @@ pub fn update_map(map_num: u32) -> bool {
     let system_paths: SystemPaths = SystemPaths::new();
     // Add a result to return errors from this
     // ? Getting the current map data
-    let map_path: PathType = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
+    let map_path: PathType =
+        PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
 
     // ? Reading the map
     let mut map_file = File::open(&map_path).expect("File could not be opened");
@@ -215,7 +218,7 @@ pub fn update_map(map_num: u32) -> bool {
 
     if new_hash == None {
         let _ = append_log(
-            unsafe { &PROGNAME },
+            unsafe { PROGNAME },
             &format!("Failed to fetch chunk data for number {}", &map_num),
         );
     }
@@ -243,7 +246,7 @@ pub fn update_map(map_num: u32) -> bool {
 
     if let Err(_e) = writeln!(map_file, "{}", updated_map) {
         eprintln!("An error occoured");
-        let _ = append_log(unsafe { &PROGNAME }, "Could save map data to file");
+        let _ = append_log(unsafe { PROGNAME }, "Could save map data to file");
     };
 
     return true;

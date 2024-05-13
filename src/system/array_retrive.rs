@@ -1,11 +1,9 @@
 use logging::append_log;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
-use system::PathType;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use system::create_hash;
-use system::errors::SystemError;
+use system::PathType;
 
 use crate::array::{array_arimitics, ChunkMap};
 use crate::config::CHUNK_SIZE;
@@ -34,7 +32,8 @@ pub fn fetch_chunk(num: u32) -> Result<String, RecsRecivedErrors> {
 
 fn fetch_chunk_by_number(map_num: u32) -> Result<String, RecsRecivedErrors> {
     let system_paths: SystemPaths = SystemPaths::new();
-    let map_path: PathType = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
+    let map_path: PathType =
+        PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
 
     // if data is return then we verify it
     match read_map_data(&map_path) {
@@ -53,7 +52,7 @@ fn fetch_chunk_by_number(map_num: u32) -> Result<String, RecsRecivedErrors> {
                 Ok(d) => d,
                 Err(e) => return Err(e),
             };
-            
+
             match verify_chunk_integrity(&chunk, &pretty_map_data) {
                 Ok(_) => return Ok(chunk),
                 Err(e) => return Err(e),
@@ -68,7 +67,7 @@ fn read_map_data(map_path: &PathType) -> Result<String, RecsRecivedErrors> {
     let mut map_file: File = match File::open(map_path) {
         Ok(d) => d,
         Err(e) => {
-            let _ = append_log(unsafe { &PROGNAME }, &e.to_string());
+            let _ = append_log(unsafe { PROGNAME }, &e.to_string());
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
                 system::errors::SystemErrorType::ErrorOpeningFile,
                 &e.to_string(),
@@ -106,7 +105,7 @@ fn verify_map_version(pretty_map_data: &ChunkMap) -> Result<(), RecsRecivedError
     match pretty_map_data.version == VERSION {
         true => return Ok(()),
         false => {
-            let _ = append_log(unsafe { &PROGNAME }, &format!(
+            let _ = append_log(unsafe { PROGNAME }, &format!(
                 "The maps used are from an older version of recs. \n --reindex-system[NOT IMPLEMENTED YET] to fix this issue. (current data will be safe)"
             ));
             return Err(RecsRecivedErrors::RecsError(RecsError::new(
@@ -136,7 +135,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap) -> Result<String, RecsRecivedErro
 
     if (chunk_end - chunk_start) < CHUNK_SIZE as u32 {
         // TODO figure out how to get rid of this
-        let _ = append_log(unsafe { &PROGNAME }, "Invalid secret chunk length");
+        let _ = append_log(unsafe { PROGNAME }, "Invalid secret chunk length");
     }
 
     loop {
@@ -167,7 +166,10 @@ fn read_chunk_data(pretty_map_data: &ChunkMap) -> Result<String, RecsRecivedErro
     Ok(_chunk)
 }
 
-fn verify_chunk_integrity(chunk: &str, pretty_map_data: &ChunkMap) -> Result<(), RecsRecivedErrors> {
+fn verify_chunk_integrity(
+    chunk: &str,
+    pretty_map_data: &ChunkMap,
+) -> Result<(), RecsRecivedErrors> {
     let chunk_hash: &str = &create_hash(chunk.to_string());
 
     if &pretty_map_data.chunk_hsh != chunk_hash {
@@ -179,8 +181,10 @@ fn verify_chunk_integrity(chunk: &str, pretty_map_data: &ChunkMap) -> Result<(),
             I would recommend exporting all data to assess any losses and reinitialize",
             pretty_map_data.chunk_num
         );
-        let _ = append_log(unsafe { &PROGNAME }, &log);
-        return Err(RecsRecivedErrors::RecsError(RecsError::new(RecsErrorType::InvalidMapHash)));
+        let _ = append_log(unsafe { PROGNAME }, &log);
+        return Err(RecsRecivedErrors::RecsError(RecsError::new(
+            RecsErrorType::InvalidMapHash,
+        )));
     };
     Ok(())
 }

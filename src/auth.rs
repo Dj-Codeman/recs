@@ -1,4 +1,3 @@
-use hex;
 use logging::append_log;
 use pretty::notice;
 // use rand::distributions::{Distribution, Uniform};
@@ -93,8 +92,12 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
                 true => {
                     match del_file(system_paths.USER_KEY_LOCATION.clone_path()) {
                         Ok(_) => {
-                            notice(&format!("{}: deleted", system_paths.USER_KEY_LOCATION.to_string()));
-                            let _ = append_log(unsafe { &PROGNAME }, "The old userkey has been deleted");
+                            notice(&format!(
+                                "{}: deleted",
+                                system_paths.USER_KEY_LOCATION.to_string()
+                            ));
+                            let _ =
+                                append_log(unsafe { PROGNAME }, "The old userkey has been deleted");
                         }
                         Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
                     };
@@ -138,7 +141,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     let _ = match write!(userkey_file, "{}", cipher_integrity) {
         Ok(_) => match debug {
             true => append_log(
-                unsafe { &PROGNAME },
+                unsafe { PROGNAME },
                 &format!(
                     "THIS IS A SECRET. The userkey check has been generated: {}",
                     &cipher_integrity
@@ -148,7 +151,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         },
         Err(e) => {
             let _ = append_log(
-                unsafe { &PROGNAME },
+                unsafe { PROGNAME },
                 "An error occoured while writing data to the master json file",
             );
             return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -176,12 +179,13 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     let pretty_userkey_map: String = serde_json::to_string_pretty(&userkey_map_data).unwrap();
 
     // creating the json path
-    let userkey_map_path: PathType = PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
+    let userkey_map_path: PathType =
+        PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
 
     // Deleting and recreating the json file
     let _ = match del_file(userkey_map_path.clone_path()) {
         Ok(_) => match debug {
-            true => append_log(unsafe { &PROGNAME }, "Deleting old usrkey if it exists"),
+            true => append_log(unsafe { PROGNAME }, "Deleting old usrkey if it exists"),
             false => Ok(()),
         },
         Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
@@ -197,7 +201,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
         Ok(d) => d,
         Err(e) => {
             let _ = append_log(
-                unsafe { &PROGNAME },
+                unsafe { PROGNAME },
                 &format!(
                     "Failed to open the new userkey.json path {}, {}",
                     &userkey_map_path, e
@@ -211,12 +215,12 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
 
     match writeln!(userkey_map_file, "{}", pretty_userkey_map) {
         Ok(_) => {
-            let _ = append_log(unsafe { &PROGNAME }, "User authentication created");
+            let _ = append_log(unsafe { PROGNAME }, "User authentication created");
             return Ok(());
         }
         Err(e) => {
             let _ = append_log(
-                unsafe { &PROGNAME },
+                unsafe { PROGNAME },
                 &format!("Could save map data to file: {}", e),
             );
             return Err(RecsRecivedErrors::SystemError(SystemError::new(
@@ -229,7 +233,7 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
 pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
     let system_paths: SystemPaths = SystemPaths::new();
     let _ = append_log(
-        unsafe { &PROGNAME },
+        unsafe { PROGNAME },
         "user key authentication request started",
     );
 
@@ -289,7 +293,7 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
     match verification_result == secret {
         true => return Ok(userkey),
         false => {
-            match append_log(unsafe { &PROGNAME }, "Authentication request failed") {
+            match append_log(unsafe { PROGNAME }, "Authentication request failed") {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             };

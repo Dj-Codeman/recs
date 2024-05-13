@@ -1,6 +1,6 @@
 use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
-use hex::{self, encode};
+use hex::encode;
 use hmac::{Hmac, Mac};
 use logging::append_log;
 use pretty::dump;
@@ -94,7 +94,7 @@ pub fn encrypt(
     cipherdata.push_str(&hmac);
 
     if cipherdata.len() == 0 {
-        let _ = append_log(unsafe { &PROGNAME }, "NO CIPHER DATA RECIVED");
+        let _ = append_log(unsafe { PROGNAME }, "NO CIPHER DATA RECIVED");
         return Err(RecsRecivedErrors::RecsError(RecsError::new(
             RecsErrorType::Error,
         )));

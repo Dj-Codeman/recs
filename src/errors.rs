@@ -122,7 +122,7 @@ pub enum RecsErrorType {
 pub enum RecsWarningType {
     OutdatedVersion,
     MisAlignedChunk,
-    FileNotDeleted
+    FileNotDeleted,
 }
 
 // pretty display
@@ -147,7 +147,7 @@ impl fmt::Display for RecsWarning {
 impl RecsError {
     pub fn new(kind: RecsErrorType) -> Self {
         RecsError {
-            kind, 
+            kind,
             details: None,
         }
     }
@@ -155,7 +155,7 @@ impl RecsError {
     pub fn new_details(kind: RecsErrorType, details: &str) -> Self {
         RecsError {
             kind,
-            details: Some(details.to_string())
+            details: Some(details.to_string()),
         }
     }
 
@@ -193,7 +193,7 @@ impl RecsError {
 impl RecsWarning {
     pub fn new(kind: RecsWarningType) -> Self {
         RecsWarning {
-            kind, 
+            kind,
             details: None,
         }
     }
@@ -201,7 +201,7 @@ impl RecsWarning {
     pub fn new_details(kind: RecsWarningType, details: &str) -> Self {
         RecsWarning {
             kind,
-            details: Some(details.to_string())
+            details: Some(details.to_string()),
         }
     }
 

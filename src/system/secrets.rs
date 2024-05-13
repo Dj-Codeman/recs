@@ -6,10 +6,12 @@ use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
-    io::{prelude::*, SeekFrom, Write},
+    io::{prelude::*, SeekFrom},
 };
 use system::{
-    create_hash, del_dir, del_file, errors::{SystemError, SystemErrorType}, path_present, truncate, ClonePath, PathType
+    create_hash, del_dir, del_file,
+    errors::{SystemError, SystemErrorType},
+    path_present, truncate, ClonePath, PathType,
 };
 
 // self and create are user made code
@@ -46,7 +48,8 @@ pub fn write(
     secret_owner: String,
     secret_name: String,
     fixed_key: bool,
-) -> Result<(String, usize), RecsRecivedErrors> {
+// ) -> Result<(String, usize), RecsRecivedErrors> {
+) -> uf<(String, usize)> {
     // String is key data, The u16 is the chunk cound
     //TODO Dep or simplyfy
     let max_buffer_size = calc_buffer();
@@ -83,7 +86,7 @@ pub fn write(
     };
 
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
-    match append_log(unsafe { &PROGNAME }, &msg) {
+    match append_log(unsafe { PROGNAME }, &msg) {
         Ok(_) => (),
         Err(e) => {
             warn("Error while reading logs");
@@ -94,14 +97,15 @@ pub fn write(
     warn(&filename.to_string());
     let system_paths: SystemPaths = SystemPaths::new();
 
-
     // testing if the file exists
     let filename_existence: bool = path_present(&filename).unwrap();
 
     if filename_existence {
         // creating the encrypted meta data file
-        let secret_map_path: PathType =
-            PathType::Content(format!("{}/{}-{}.meta", system_paths.META, secret_owner, secret_name));
+        let secret_map_path: PathType = PathType::Content(format!(
+            "{}/{}-{}.meta",
+            system_paths.META, secret_owner, secret_name
+        ));
 
         // ? picking a chunk number
         let upper_limit: u32 = array_arimitics();
@@ -125,7 +129,8 @@ pub fn write(
         };
 
         // create the secret path
-        let secret_path: PathType = PathType::Content(format!("{}/{}.recs", system_paths.DATA, unique_id));
+        let secret_path: PathType =
+            PathType::Content(format!("{}/{}.recs", system_paths.DATA, unique_id));
 
         // Determining chunk amount and size
         let chunk_count: usize = file_size as usize / buffer_size;
@@ -197,13 +202,13 @@ pub fn write(
         match secret_file {
             Ok(_) => {
                 let _ = append_log(
-                    unsafe { &PROGNAME },
+                    unsafe { PROGNAME },
                     &format!("File created: {}", &secret_path),
                 );
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 let _ = append_log(
-                    unsafe { &PROGNAME },
+                    unsafe { PROGNAME },
                     &format!("The file already exists {}", &secret_path),
                 );
                 return Err(RecsRecivedErrors::RecsError(RecsError::new(
@@ -290,14 +295,14 @@ pub fn write(
                         match e {
                             RecsRecivedErrors::LoggerError(ed) => {
                                 let _ = append_log(
-                                    unsafe { &PROGNAME },
+                                    unsafe { PROGNAME },
                                     &format!("UNUSED: an error occoured while logging: {:?}", ed),
                                 );
                                 return Err(RecsRecivedErrors::LoggerError(ed));
                             }
                             RecsRecivedErrors::SystemError(ed) => {
                                 let _ = append_log(
-                                    unsafe { &PROGNAME },
+                                    unsafe { PROGNAME },
                                     &format!(
                                         "A system error has occoured while writing to file: {:?}",
                                         ed
@@ -307,7 +312,7 @@ pub fn write(
                             }
                             RecsRecivedErrors::RecsError(ed) => {
                                 let _ = append_log(
-                                    unsafe { &PROGNAME },
+                                    unsafe { PROGNAME },
                                     &format!("RECS ERROR: {:?}", ed),
                                 );
                                 return Err(RecsRecivedErrors::RecsError(ed));
@@ -320,7 +325,7 @@ pub fn write(
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     // reached end of file
                     let _ = append_log(
-                        unsafe { &PROGNAME },
+                        unsafe { PROGNAME },
                         &format!("Finished reading data from {}", &filename),
                     );
                     break;
@@ -351,7 +356,7 @@ pub fn write(
 
         // TODO ERROR HANDELING
         match secret_map_file {
-            Ok(_) => match append_log(&unsafe { &PROGNAME }, "new secret map created") {
+            Ok(_) => match append_log(&unsafe { PROGNAME }, "new secret map created") {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             },
@@ -360,7 +365,7 @@ pub fn write(
                     Ok(_) => (),
                     Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
                 };
-                match append_log( &unsafe { &PROGNAME }, "The json associated with this file id already exists. Nothing has been deleted.") {
+                match append_log( &unsafe { PROGNAME }, "The json associated with this file id already exists. Nothing has been deleted.") {
                     Ok(_) => (),
                     Err(e) => return Err(RecsRecivedErrors::repack(e)),
                 };
@@ -411,7 +416,7 @@ pub fn write(
         return Ok((key_data, chunk_count));
     } else {
         let _ = append_log(
-            unsafe { &PROGNAME },
+            unsafe { PROGNAME },
             &format!("Warning {} doesn't exist", &filename),
         );
         return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
@@ -428,7 +433,6 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
     let dummy_name: &str = "temp";
     // write the data to the file
     let system_paths: SystemPaths = SystemPaths::new();
-
 
     // ! making the secret path to append data too
     let mut dummy_file: File = match File::create(dummy_path.clone_path()) {
@@ -465,8 +469,10 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
             // got the key now get the cipher data
             let key: String = data;
             // finding the dummy map
-            let secret_map_path: PathType =
-                PathType::Content(format!("{}/{}-{}.meta", system_paths.META, dummy_owner, dummy_name));
+            let secret_map_path: PathType = PathType::Content(format!(
+                "{}/{}-{}.meta",
+                system_paths.META, dummy_owner, dummy_name
+            ));
             // decrypting and reading
             let cipher_map_data: String = match read_to_string(secret_map_path) {
                 Ok(d) => d,
@@ -506,17 +512,16 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
                     true => (),
                     false => {
                         let _ = append_log(
-                            unsafe { &PROGNAME },
+                            unsafe { PROGNAME },
                             "THE DATA FILE SPECIFIED DOES NOT EXIST",
                         );
                         return Err(RecsRecivedErrors::RecsError(RecsError::new(
                             RecsErrorType::Error,
                         )));
-                    },
+                    }
                 },
                 Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
             }
-
 
             // reading and printing the file
             let recs_data: String = match read_to_string(&secret_map.secret_path) {
@@ -668,12 +673,15 @@ pub fn read(
     fixed_key: bool,
 ) -> Result<(PathType, PathType, Vec<Option<RecsRecivedWarnings>>), RecsRecivedErrors> {
     // creating the secret json path
-    match append_log(unsafe { &PROGNAME }, "Decrypting request") {
+    match append_log(unsafe { PROGNAME }, "Decrypting request") {
         Ok(_) => (),
         Err(e) => return Err(RecsRecivedErrors::repack(e)),
     };
     let system_paths: SystemPaths = SystemPaths::new();
-    let secret_map_path: PathType = PathType::Content(format!("{}/{}-{}.meta", system_paths.META, secret_owner, secret_name));
+    let secret_map_path: PathType = PathType::Content(format!(
+        "{}/{}-{}.meta",
+        system_paths.META, secret_owner, secret_name
+    ));
 
     let secret_json_existence: bool = secret_map_path.to_path_buf().exists();
     if secret_json_existence {
@@ -700,10 +708,10 @@ pub fn read(
 
         let _ = match unsafe { DEBUGGING } {
             Some(bug) => match bug {
-                true => append_log(unsafe { &PROGNAME }, &format!("{:?}", secret_map)),
-                false => append_log(unsafe { &PROGNAME }, &format!("Secret map data recived")),
+                true => append_log(unsafe { PROGNAME }, &format!("{:?}", secret_map)),
+                false => append_log(unsafe { PROGNAME }, &format!("Secret map data recived")),
             },
-            None => append_log(unsafe { &PROGNAME }, &format!("Secret map data recived")),
+            None => append_log(unsafe { PROGNAME }, &format!("Secret map data recived")),
         };
 
         let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![None];
@@ -713,7 +721,7 @@ pub fn read(
             true => None,
             false => {
                 let _ = append_log(
-                    unsafe { &PROGNAME },
+                    unsafe { PROGNAME },
                     "Data from and older version of recs attempting to read anyway",
                 );
                 Some(RecsRecivedWarnings::RecsWarning(RecsWarning::new(
@@ -727,7 +735,9 @@ pub fn read(
         let temp_name: String = match path_present(&secret_map.secret_path) {
             Ok(b) => match b {
                 // This ensure the tmp path are more likely to be unique
-                true => truncate(&create_hash(secret_map.secret_path.to_string())[5..], 10).to_owned(),
+                true => {
+                    truncate(&create_hash(secret_map.secret_path.to_string())[5..], 10).to_owned()
+                }
                 false => {
                     return Err(RecsRecivedErrors::RecsError(RecsError::new(
                         RecsErrorType::InvalidFile,
@@ -744,7 +754,11 @@ pub fn read(
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
 
-        let tmp_path: PathType = PathType::Content(format!("/tmp/dusa_{}{:?}", temp_name, since_the_epoch.as_secs()));
+        let tmp_path: PathType = PathType::Content(format!(
+            "/tmp/dusa_{}{:?}",
+            temp_name,
+            since_the_epoch.as_secs()
+        ));
         match del_file(tmp_path.clone_path()) {
             Ok(_) => (),
             Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
@@ -768,7 +782,7 @@ pub fn read(
             Ok(d) => {
                 if d.len() as usize == 0 {
                     let _ = append_log(
-                        unsafe { &PROGNAME },
+                        unsafe { PROGNAME },
                         "The secret file has a size of zero, it is corrupted",
                     );
                     return Err(RecsRecivedErrors::RecsError(RecsError::new(
@@ -899,7 +913,7 @@ pub fn read(
                     break;
                 }
                 Err(e) => {
-                    match append_log(unsafe { &PROGNAME }, &e.to_string()) {
+                    match append_log(unsafe { PROGNAME }, &e.to_string()) {
                         Ok(_) => (),
                         Err(e) => return Err(RecsRecivedErrors::repack(e)),
                     };
@@ -951,7 +965,7 @@ pub fn read(
             }
         }
         let _ = append_log(
-            unsafe { &PROGNAME },
+            unsafe { PROGNAME },
             &format!(
                 "Decrypting request: {} has been decrypted !",
                 &secret_map.file_path
@@ -980,7 +994,7 @@ pub fn read(
         // moving to the right dir
         // secret_map.file_path
     } else {
-        let _ = append_log(unsafe { &PROGNAME }, "The secret map doen't exist");
+        let _ = append_log(unsafe { PROGNAME }, "The secret map doen't exist");
         return Err(RecsRecivedErrors::RecsError(RecsError::new(
             RecsErrorType::InvalidMapData,
         )));
@@ -989,9 +1003,12 @@ pub fn read(
 
 pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsRecivedErrors> {
     // creating the secret json file
-    let _ = append_log(unsafe { &PROGNAME }, "Forgetting secret");
+    let _ = append_log(unsafe { PROGNAME }, "Forgetting secret");
     let system_paths: SystemPaths = SystemPaths::new();
-    let secret_map_path = PathType::Content(format!("{}/{}-{}.meta", system_paths.META, secret_owner, secret_name));
+    let secret_map_path = PathType::Content(format!(
+        "{}/{}-{}.meta",
+        system_paths.META, secret_owner, secret_name
+    ));
 
     // testing if the secret json exists before starting encryption
     if path_present(&secret_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
@@ -1042,7 +1059,7 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
 
         return Ok(());
     } else {
-        match append_log(unsafe { &PROGNAME }, "The file requested doesn't exist") {
+        match append_log(unsafe { PROGNAME }, "The file requested doesn't exist") {
             Ok(_) => (),
             Err(e) => return Err(RecsRecivedErrors::repack(e)),
         };
@@ -1076,7 +1093,7 @@ fn verify_signature(
     warnings.push( match sig_version == VERSION {
         true => None,
         false => {
-            let _ = append_log(unsafe { &PROGNAME }, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
+            let _ = append_log(unsafe { PROGNAME }, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
             Some(RecsRecivedWarnings::RecsWarning(RecsWarning::new(
                 RecsWarningType::OutdatedVersion,
             )))
@@ -1099,9 +1116,9 @@ fn verify_signature(
     warnings.push(match sig_hash == new_hash {
         true => None,
         false => {
-            let _ = append_log(unsafe { &PROGNAME }, "A chunk had an invalid has signature");
+            let _ = append_log(unsafe { PROGNAME }, "A chunk had an invalid has signature");
             match append_log(
-                unsafe { &PROGNAME },
+                unsafe { PROGNAME },
                 "an option will be in a cli tool to ignore checks in an emergency",
             ) {
                 Ok(_) => (),
@@ -1131,7 +1148,7 @@ fn verify_signature(
     });
 
     let _ = append_log(
-        unsafe { &PROGNAME },
+        unsafe { PROGNAME },
         &format!(
             "Decrypting request: {} signatures verified, writing",
             &new_hash

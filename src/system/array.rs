@@ -2,10 +2,12 @@ use logging::{append_log, errors::MyErrors};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
-    io::{prelude::*, SeekFrom, Write},
+    io::{prelude::*, SeekFrom},
     str,
 };
-use system::{create_hash, del_dir, del_file, errors::SystemError, path_present, ClonePath, PathType};
+use system::{
+    create_hash, del_dir, del_file, errors::SystemError, path_present, ClonePath, PathType,
+};
 
 use crate::{
     config::{ARRAY_LEN, CHUNK_SIZE},
@@ -39,7 +41,7 @@ pub fn array_arimitics() -> u32 {
 
 pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
     let system_paths: SystemPaths = SystemPaths::new();
-    match append_log(unsafe { &PROGNAME }, "Creating system array") {
+    match append_log(unsafe { PROGNAME }, "Creating system array") {
         Ok(_) => (),
         Err(e) => return Err(RecsRecivedErrors::repack(e)),
     };
@@ -53,7 +55,7 @@ pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
     // Write the system array contents to the file
     match write_system_array_to_file(&system_array_contents) {
         Ok(_) => {
-            match append_log(unsafe { &PROGNAME }, "Created system array") {
+            match append_log(unsafe { PROGNAME }, "Created system array") {
                 Ok(_) => (),
                 Err(e) => return Err(RecsRecivedErrors::repack(e)),
             };
@@ -61,7 +63,7 @@ pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
         }
         Err(e) => {
             let _ = append_log(
-                unsafe { &PROGNAME },
+                unsafe { PROGNAME },
                 &format!("Could not write the system_array to the path specified: "),
             );
             return Err(e);
@@ -90,7 +92,7 @@ fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
         .append(true)
         .open(system_paths.SYSTEM_ARRAY_LOCATION.to_owned())
         .map_err(|e| {
-            let _ = append_log(unsafe { &PROGNAME }, &e.to_string());
+            let _ = append_log(unsafe { PROGNAME }, &e.to_string());
             RecsRecivedErrors::SystemError(SystemError::new_details(
                 system::errors::SystemErrorType::ErrorCreatingFile,
                 &e.to_string(),
@@ -98,7 +100,7 @@ fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
         })?;
 
     write!(system_array_file, "{}", contents).map_err(|e| {
-        let _ = append_log(unsafe { &PROGNAME }, &e.to_string());
+        let _ = append_log(unsafe { PROGNAME }, &e.to_string());
         RecsRecivedErrors::SystemError(SystemError::new_details(
             system::errors::SystemErrorType::ErrorCreatingFile,
             &e.to_string(),
@@ -165,7 +167,8 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                     chunk_end: range_end,
                 };
 
-                let chunk_map_path: PathType = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
+                let chunk_map_path: PathType =
+                    PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
 
                 if path_present(&chunk_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
                     match del_file(chunk_map_path.clone_path()) {
@@ -201,7 +204,7 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
 
                 match write!(chunk_map_file, "{}", pretty_chunk_map) {
                     Ok(_) => match append_log(
-                        unsafe { &PROGNAME },
+                        unsafe { PROGNAME },
                         &format!("The map file {} has been created", &chunk_map_path),
                     ) {
                         Ok(_) => (),
@@ -224,7 +227,7 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
         range_end += CHUNK_SIZE as u32;
     }
 
-    match append_log(unsafe { &PROGNAME }, "Indexed system array !") {
+    match append_log(unsafe { PROGNAME }, "Indexed system array !") {
         Ok(_) => (),
         Err(e) => return Err(RecsRecivedErrors::repack(e)),
     };
