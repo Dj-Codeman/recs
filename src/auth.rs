@@ -31,14 +31,14 @@ pub struct KeyIndex {
 }
 
 // ! KEY GENERATION SECTION
-pub fn generate_user_key(debug: bool, mut errors: ErrorArray, mut warnings: WarningArray) -> uf<()> {
+pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningArray) -> uf<()> {
     // This function generates to key we use to encrypt data
     // The key is not actually stored but a value is encrypted with
     // A generated key and saved. At decryption time the key is checked against
     // The stored value. If it is the the same value are originally encrypted
     // We can attempt to decrypt the data given
 
-    let salt: String = match fetch_chunk_helper(1, errors).uf_unwrap() {
+    let salt: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };

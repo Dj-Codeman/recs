@@ -8,24 +8,24 @@ mod auth;
 mod config;
 #[path = "system/encrypt.rs"]
 mod encrypt;
+#[deprecated(since = "0.1.0", note = "please use `custom_error` instead")]
 pub mod errors;
 #[path = "enviornment.rs"]
 mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
-use errors::RecsRecivedErrors;
 use local_env::VERSION;
 use logging::append_log;
 use secret::{read_raw, write_raw};
-use system::{create_hash, del_file, path_present, ClonePath, PathType};
+use system::{errors::{ErrorArray, UnifiedResult as uf, WarningArray}, functions::{create_hash, del_file, open_file, path_present}, types::{ClonePath, PathType}};
 
 use std::{
-    fs::{File, OpenOptions},
+    fs::OpenOptions,
     io::{Read, Write},
 };
 
 use crate::{
-    array::{index_system_array, ChunkMap},
+    array::ChunkMap,
     array_tools::fetch_chunk,
     config::{ARRAY_LEN, CHUNK_SIZE},
     local_env::{set_system, SystemPaths},
@@ -53,7 +53,7 @@ pub fn set_prog(data: &'static str) {
 }
 
 /// Initialize checks the progname, and debugging values snf ensure the lib is ready to function
-pub fn initialize() -> Result<(), RecsRecivedErrors> {
+pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
     let debugging: bool = match unsafe { DEBUGGING } {
         Some(d) => match d {
             true => true,
@@ -71,92 +71,92 @@ pub fn initialize() -> Result<(), RecsRecivedErrors> {
         false => false,
     };
 
-    match append_log(unsafe { PROGNAME }, "RECS STARTED") {
+    match append_log(unsafe { PROGNAME }, "RECS STARTED", errors.clone()).uf_unwrap() {
         Ok(_) => (),
-        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+        Err(e) => return uf::new(Err(e)),
     };
 
-    match ensure_system_path(unsafe { PROGNAME }, debug) {
+    match ensure_system_path(unsafe { PROGNAME }, debug, errors.clone(), warnings.clone()).uf_unwrap() {
         Ok(_) => (),
-        Err(e) => return Err(e),
+        Err(e) => return uf::new(Err(e)),
     };
 
-    match ensure_max_map_exists() {
+    match ensure_max_map_exists(errors.clone()).uf_unwrap() {
         Ok(_) => (),
-        Err(e) => return Err(e),
+        Err(e) => return uf::new(Err(e)),
     };
 
-    Ok(())
+    return uf::new(Ok(()))
 }
 
-fn ensure_system_path(prog: &str, debug: bool) -> Result<(), RecsRecivedErrors> {
+fn ensure_system_path(prog: &str, debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
     let system_paths: SystemPaths = SystemPaths::new();
-    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION)
-        .map_err(|e| RecsRecivedErrors::SystemError(e))?
-    {
-        true => (), // Nothing needs to be done the lib with this name has  already been initialized
-        false => {
-            match append_log(
-                prog,
-                "System array file does not exist, re initializing recs",
-            ) {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::repack(e)),
-            };
+    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
+        Ok(d) => match d {
+            true => return uf::new(Ok(())),
+            false => {
+                match append_log(prog, "System array file does not exist", errors.clone()).uf_unwrap() {
+                    Ok(_) => (),
+                    Err(e) => return uf::new(Err(e)),
+                };
 
-            match set_system(debug) {
-                Ok(_) => (),
-                Err(e) => return Err(e),
-            };
-        }
-    };
-    Ok(())
+                match set_system(debug, errors.clone(), warnings.clone()).uf_unwrap() {
+                    Ok(_) => (),
+                    Err(e) => return uf::new(Err(e)),
+                };
+                return uf::new(Ok(()));
+            },
+        },
+        Err(e) => return uf::new(Err(e)),
+    }
 }
 
-fn ensure_max_map_exists() -> Result<(), RecsRecivedErrors> {
+fn ensure_max_map_exists(errors: ErrorArray) -> uf<()> {
     let system_paths: SystemPaths = SystemPaths::new();
     let max_map = ARRAY_LEN / CHUNK_SIZE;
     let max_map_path = PathType::Content(format!("{}/{}.map", system_paths.MAPS, max_map - 1));
 
-    match path_present(&max_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
-        true => return Ok(()),
-        false => match index_system_array() {
-            Ok(_) => return Ok(()),
-            Err(e) => return Err(e),
-        },
-    };
+    match path_present(&max_map_path, errors.clone()).uf_unwrap() {
+        Ok(_) => return uf::new(Ok(())),
+        Err(e) => return uf::new(Err(e)),
+    }
 }
 
 // Normal actions
 
 /// Insert takes a relative path encrypts and stores files. Weather or not they're deleted is based on values in the config.rs file
-pub fn insert(filename: PathType, owner: String, name: String) -> Result<(), RecsRecivedErrors> {
-    match write(filename, owner, name, false) {
-        Ok(_) => return Ok(()),
-        Err(e) => return Err(e),
+pub fn insert(filename: PathType, owner: String, name: String, errors: ErrorArray) -> uf<()> {
+    match write(filename, owner, name, false, errors).uf_unwrap() {
+        Ok(_) => return uf::new(Ok(())),
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
 /// Retrieve starts a request to decrypt the file requested on sucess it returns where the file currently is 'String' and where to file was when it was encrypted 'String' it is up to the client to decide weather to move the file there or read the contents and delete the file
-pub fn retrive(
+pub fn retrieve(
     owner: String,
     name: String,
     uid: u32,
-) -> Result<(PathType, PathType), RecsRecivedErrors> {
-    match read(owner, name, uid, false) {
-        Ok((file_path, file_home, _)) => return Ok((file_path, file_home)), // TODO implement a handeler for warning
-        Err(e) => return Err(e),
+    errors: ErrorArray,
+    warnings: WarningArray
+) -> uf<(PathType, PathType)> {
+    match read(owner, name, uid, false, errors, warnings).uf_unwrap() {
+        Ok(d) => {
+            d.warning.display();
+            return uf::new(Ok(d.data));
+        },
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
-pub fn remove(owner: String, name: String) -> Result<(), RecsRecivedErrors> {
-    match forget(owner, name) {
-        Ok(_) => return Ok(()),
-        Err(e) => return Err(e),
+pub fn remove(owner: String, name: String, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+    match forget(owner, name, errors, warnings).uf_unwrap() {
+        Ok(_) => return uf::new(Ok(())),
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
-pub fn ping(owner: String, name: String) -> Result<bool, RecsRecivedErrors> {
+pub fn ping(owner: String, name: String, errors: ErrorArray) -> uf<bool> {
     let system_paths: SystemPaths = SystemPaths::new();
     let secret_map_path = PathType::Content(format!(
         "{}/{owner}-{name}.meta",
@@ -164,13 +164,13 @@ pub fn ping(owner: String, name: String) -> Result<bool, RecsRecivedErrors> {
         owner = owner,
         name = name
     ));
-    path_present(&secret_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))
+    path_present(&secret_map_path, errors)
 }
 
-pub fn encrypt_raw(data: String) -> Result<(String, String, usize), RecsRecivedErrors> {
-    match write_raw(data.into()) {
-        Ok((key, data, chunks)) => return Ok((key, data, chunks)),
-        Err(e) => return Err(e),
+pub fn encrypt_raw(data: String, errors: ErrorArray, warnings: WarningArray) -> uf<(String, String, usize)> {
+    match write_raw(data.into(), errors, warnings).uf_unwrap() {
+        Ok((key, data, chunks)) => return uf::new(Ok((key, data, chunks))),
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
@@ -178,14 +178,19 @@ pub fn decrypt_raw(
     recs_data: String,
     recs_key: String,
     recs_chunks: usize,
-) -> Result<Vec<u8>, RecsRecivedErrors> {
-    match read_raw(recs_data, recs_key, recs_chunks) {
-        Ok((_warnings, data)) => Ok(data),
-        Err(e) => return Err(e),
+    errors: ErrorArray,
+    warnings: WarningArray
+) -> uf<Vec<u8>> {
+    match read_raw(recs_data, recs_key, recs_chunks, errors, warnings).uf_unwrap() {
+        Ok(d) => {
+            d.warning.display();
+            return uf::new(Ok(d.data))
+        },
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
-pub fn update_map(map_num: u32) -> bool {
+pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<bool> {
     let system_paths: SystemPaths = SystemPaths::new();
     // Add a result to return errors from this
     // ? Getting the current map data
@@ -193,7 +198,10 @@ pub fn update_map(map_num: u32) -> bool {
         PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
 
     // ? Reading the map
-    let mut map_file = File::open(&map_path).expect("File could not be opened");
+    let mut map_file = match open_file(map_path.clone_path(), errors.clone()).uf_unwrap() {
+        Ok(d) => d,
+        Err(e) => return uf::new(Err(e)),
+    };
     let mut map_data: String = String::new();
 
     map_file
@@ -204,7 +212,7 @@ pub fn update_map(map_num: u32) -> bool {
     let pretty_map_data: ChunkMap = serde_json::from_str(&map_data).unwrap();
 
     // ? calculating new hash
-    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num) {
+    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num, errors.clone()).uf_unwrap() {
         Ok(data) => (true, Some(data)),
         Err(_) => (false, None),
     };
@@ -220,6 +228,7 @@ pub fn update_map(map_num: u32) -> bool {
         let _ = append_log(
             unsafe { PROGNAME },
             &format!("Failed to fetch chunk data for number {}", &map_num),
+            errors.clone()
         );
     }
 
@@ -234,7 +243,7 @@ pub fn update_map(map_num: u32) -> bool {
     };
 
     // write the new map file
-    let _ = del_file(map_path.clone_path());
+    let _ = del_file(map_path.clone_path(), errors.clone(), warnings.clone());
     let updated_map = serde_json::to_string_pretty(&new_map).unwrap();
 
     let mut map_file = OpenOptions::new()
@@ -246,38 +255,24 @@ pub fn update_map(map_num: u32) -> bool {
 
     if let Err(_e) = writeln!(map_file, "{}", updated_map) {
         eprintln!("An error occoured");
-        let _ = append_log(unsafe { PROGNAME }, "Could save map data to file");
+        let _ = append_log(unsafe { PROGNAME }, "Could save map data to file", errors.clone());
     };
 
-    return true;
+    return uf::new(Ok(true));
 }
 
-#[test]
-fn ping_check() {
-    let result = ping(unsafe { PROGNAME.to_owned() }, "dummy".to_string()).unwrap();
-    assert_eq!(result, false);
-}
-
-// Debugging and tooling
-
-pub fn check_map(map_num: u32) -> bool {
+pub fn check_map(map_num: u32, errors: ErrorArray) -> uf<bool> {
     // needs to fail gracefuly
-    match fetch_chunk(map_num) {
-        Ok(_) => true,
-        Err(_) => false,
+    match fetch_chunk(map_num, errors).uf_unwrap() {
+        Ok(_) => return uf::new(Ok(true)),
+        Err(_) =>return uf::new(Ok(false)),
     }
 }
 
-#[test]
-fn null_map() {
-    let result = check_map(8000000);
-    assert_eq!(result, false);
-}
-// only passes on un initialized systems
-
+// Debugging and tooling
 pub fn _get_array_props() {
+    unimplemented!();
     // reading part of the array
     // get version
     // add a hash somewhere
-    let _ = "";
 }

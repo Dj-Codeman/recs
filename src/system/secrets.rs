@@ -183,9 +183,9 @@ pub fn write(
         let mut range_end: u64 = buffer_size as u64;
 
         // ! making the secret path to append data too
-        let secret_file = open_file(secret_path, errors.clone()).uf_unwrap();
+        let secret_file_raw = open_file(secret_path.clone_path(), errors.clone()).uf_unwrap();
 
-        let mut file = match secret_file {
+        let mut secret_file = match secret_file_raw {
             Ok(d) => d.try_clone().unwrap(),
             Err(e) => return uf::new(Err(e)),
         };
@@ -247,7 +247,7 @@ pub fn write(
                     // ! THIS IS WHERE THE FILE IS OPENED
 
 
-                    match write!(file, "{}", processed_chunk){
+                    match write!(secret_file, "{}", processed_chunk){
                         Ok(_) => (),
                         Err(e) => {
                             errors.push(ErrorArrayItem::from(e));
@@ -286,7 +286,7 @@ pub fn write(
             .create_new(true)
             .write(true)
             .append(true)
-            .open(secret_map_path);
+            .open(&secret_map_path);
 
         // TODO ERROR HANDELING
         match secret_map_file {
@@ -314,7 +314,7 @@ pub fn write(
             match secret_map_file.as_mut() {
                 Ok(d) => d,
                 Err(e) =>{
-                    errors.push(ErrorArrayItem::from(*e));
+                    errors.push(ErrorArrayItem::from(e));
                     return uf::new(Err(errors));
                 }
             },
@@ -330,12 +330,12 @@ pub fn write(
 
         // resolving the key data
         let key_data: String = match create_writing_key(
-            match fetch_chunk_helper(num, errors).uf_unwrap() {
+            match fetch_chunk_helper(num, errors.clone()).uf_unwrap() {
                 Ok(d) => d,
                 Err(e) => return uf::new(Err(e)),
             },
             fixed_key,
-            errors
+            errors.clone()
         ).uf_unwrap() {
             Ok(d) => d,
             Err(e) => return uf::new(Err(e)),
@@ -464,7 +464,7 @@ pub fn read_raw(
     key: String,
     chunks: usize,
     mut errors: ErrorArray,
-    mut warnings: WarningArray
+    warnings: WarningArray
 ) -> uf<OkWarning<Vec<u8>>> {
     // Recreating the cipher chunk size
     let secret_size: usize = data.chars().count();
@@ -498,7 +498,7 @@ pub fn read_raw(
                 }
             };
 
-            // take the first spliiting chunk into signature and cipher data
+            // take the first splitting chunk into signature and cipher data
             let encoded_signature: &str = truncate(&secret_buffer, 64);
             // ! When this inevitably fails, Remember the paddingcount() changes the sig legnth.
             let cipher_buffer: &str = &secret_buffer[64..]; // * this is the encrypted hex encoded bytes
@@ -651,7 +651,7 @@ pub fn read(
             temp_name,
             since_the_epoch.as_secs()
         ));
-        match del_file(tmp_path.clone_path(), errors.clone(), warnings).uf_unwrap() {
+        match del_file(tmp_path.clone_path(), errors.clone(), warnings.clone()).uf_unwrap() {
             Ok(_) => (),
             Err(e) => return uf::new(Err(e)),
         };
@@ -663,7 +663,7 @@ pub fn read(
                 Err(e) => return uf::new(Err(e)),
             },
             fixed_key,
-            errors
+            errors.clone()
         ).uf_unwrap() {
             Ok(d) => d,
             Err(e) => return uf::new(Err(e)),
@@ -755,7 +755,7 @@ pub fn read(
                     let cipher_buffer: &str = &secret_buffer[64..];
 
                     // * decrypting the chunk
-                    let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &writting_key, errors).uf_unwrap() {
+                    let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &writting_key, errors.clone()).uf_unwrap() {
                         Ok(d) => d,
                         Err(e) => return uf::new(Err(e)),
                     };
@@ -800,7 +800,7 @@ pub fn read(
             // !? Verify the signature integrity
             // let _sig_digit_count = truncate(&signature, 1);
             match verify_signature(&encoded_buffer, signature.as_str(), signature_count, warnings.clone(), errors.clone()).uf_unwrap() {
-                Ok(mut w) => {
+                Ok(w) => {
                     // ? unencoding buffer
                     // * This is where the decoded bytes are retrived
                     let plain_result: Vec<u8> = match hex::decode(encoded_buffer.clone()) {
@@ -868,7 +868,7 @@ pub fn read(
     }
 }
 
-pub fn forget(secret_owner: String, secret_name: String, mut errors: ErrorArray, mut warnings: WarningArray) -> uf<()>{
+pub fn forget(secret_owner: String, secret_name: String, mut errors: ErrorArray, warnings: WarningArray) -> uf<()>{
     // creating the secret json file
     let _ = append_log(unsafe { PROGNAME }, "Forgetting secret", errors.clone());
     let system_paths: SystemPaths = SystemPaths::new();

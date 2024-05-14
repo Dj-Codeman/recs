@@ -36,7 +36,7 @@ pub fn fetch_chunk(num: u32, errors: ErrorArray) -> uf<String> {
     return fetch_chunk_by_number(map_num, errors);
 }
 
-fn fetch_chunk_by_number(map_num: u32, mut errors: ErrorArray) -> uf<String> {
+fn fetch_chunk_by_number(map_num: u32, errors: ErrorArray) -> uf<String> {
     let warnings = WarningArray::new_container();
     let system_paths: SystemPaths = SystemPaths::new();
     let map_path: PathType =

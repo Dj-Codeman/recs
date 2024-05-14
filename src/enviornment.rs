@@ -1,13 +1,12 @@
 use logging::append_log;
 use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
-use system::{errors::{ErrorArray, UnifiedResult as uf, WarningArray}, functions::{make_dir, path_present}, types::{ClonePath, PathType}};
+use system::{errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray}, functions::{make_dir, path_present}, types::{ClonePath, PathType}};
 
 use crate::{
     array::{generate_system_array, index_system_array},
     auth::generate_user_key,
     config::STREAMING_BUFFER_SIZE,
-    errors::RecsRecivedErrors,
     PROGNAME,
 };
 
@@ -53,41 +52,41 @@ impl SystemPaths {
 
 // !  enviornment as in program
 
-pub fn set_system(debug: bool, mut errors: ErrorArray, mut warnings: WarningArray) -> uf<()> {
+pub fn set_system(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
     // This functions is responsible for creating the dir tree,
     // It also monitors the output of the functions that create keys and indexs for them
-    match make_folders(debug) {
+    match make_folders(debug, errors.clone()).uf_unwrap() {
         Ok(_) => (),
-        Err(e) => return Err(e),
+        Err(e) => return uf::new(Err(e)),
     };
 
-    match generate_system_array(errors).uf_unwrap() {
+    match generate_system_array(errors.clone()).uf_unwrap() {
         Ok(_) => {
-            let _ = match index_system_array(errors, warnings).uf_unwrap() {
+            let _ = match index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(_) => append_log(
                     unsafe { PROGNAME },
                     "System array has been created and indexed",
-                    errors
+                    errors.clone()
                 ),
 
                 Err(e) => return uf::new(Err(e)),
             };
         }
-        Err(e) => return Err(e),
+        Err(e) => return uf::new(Err(e)),
     };
 
-    match generate_user_key(debug) {
-        Ok(_) => Ok(()),
-        Err(e) => return Err(e),
+    match generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
+        Ok(_) => uf::new(Ok(())),
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
-// ! enviornment as in file paths
+// ! environment as in file paths
 fn make_folders(debug: bool, mut errors: ErrorArray) -> uf<()> {
-    // * Verifing path exists and creating missing ones
+    // * Verifying path exists and creating missing ones
     let system_paths: SystemPaths = SystemPaths::new();
 
-    match path_present(&system_paths.SYSTEM_PATH, errors).uf_unwrap() {
+    match path_present(&system_paths.SYSTEM_PATH, errors.clone()).uf_unwrap() {
         Ok(b) => match b {
             true => {
                 // we're ok to populate folder tree
@@ -97,12 +96,12 @@ fn make_folders(debug: bool, mut errors: ErrorArray) -> uf<()> {
                 paths.insert(2, system_paths.META.clone());
 
                 for path in paths.iter() {
-                    match make_dir(&path.clone_path(), errors).uf_unwrap() {
-                        Ok(d) => match debug {
+                    match make_dir(&path.clone_path(), errors.clone()).uf_unwrap() {
+                        Ok(_) => match debug { // * This might be a bug 
                             true => append_log(
                                 unsafe { PROGNAME },
                                 &format!("Path : {} created", &path),
-                                errors
+                                errors.clone()
                             ),
                             false => return uf::new(Ok(())),
                         },
@@ -111,18 +110,16 @@ fn make_folders(debug: bool, mut errors: ErrorArray) -> uf<()> {
                 }
             }
             false => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    system::errors::SystemErrorType::ErrorCreatingFile,
-                    "SYSTEM_PATH is missing",
-                )))
+                errors.push(ErrorArrayItem::new(SE::CreatingFile, "System path missing".to_string()));
+                return uf::new(Err(errors))
             }
         },
-        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+        Err(e) => return uf::new(Err(e)),
     }
-    Ok(())
+    return uf::new(Ok(()))
 }
 
-// ! enviornment as in system
+// ! environment as in system
 // not needed for small text string it passwords
 // dep at some point
 pub fn calc_buffer() -> usize {
@@ -146,4 +143,4 @@ pub fn calc_buffer() -> usize {
     return buffer_size as usize; // number of bytess
 }
 
-// * enviornment as in host
+// * environment as in host

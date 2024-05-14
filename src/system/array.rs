@@ -8,7 +8,7 @@ use std::{
 use system::{
     errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray},
     functions::{create_hash, del_dir, del_file, open_file, path_present},
-    types::PathType,
+    types::{ClonePath, PathType},
 };
 
 use crate::{
@@ -40,7 +40,7 @@ pub fn array_arimitics() -> u32 {
     return total_chunks;
 }
 
-pub fn generate_system_array(mut errors: ErrorArray) -> uf<bool> {
+pub fn generate_system_array(errors: ErrorArray) -> uf<bool> {
     let system_paths: SystemPaths = SystemPaths::new();
     match append_log(unsafe { PROGNAME }, "Creating system array", errors.clone()).uf_unwrap() {
         Ok(_) => (),
@@ -98,7 +98,7 @@ fn write_system_array_to_file(contents: &str, mut errors: ErrorArray) -> uf<()> 
         };
 
     match write!(system_array_file, "{}", contents) {
-        Ok(d) => return uf::new(Ok(())),
+        Ok(_) => return uf::new(Ok(())),
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
             return uf::new(Err(errors));
@@ -116,7 +116,7 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
     #[allow(unused_assignments)] // * cheap fix
     let mut chunk: String = String::new();
 
-    let mut file = match open_file(system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
+    let mut file = match open_file(system_paths.SYSTEM_ARRAY_LOCATION.clone_path(), errors.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
@@ -176,7 +176,7 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
                     }
                 };
 
-                let mut chunk_map_file = match open_file(chunk_map_path, errors.clone()).uf_unwrap()
+                let mut chunk_map_file = match open_file(chunk_map_path.clone_path(), errors.clone()).uf_unwrap()
                 {
                     Ok(d) => d,
                     Err(e) => return uf::new(Err(e)),

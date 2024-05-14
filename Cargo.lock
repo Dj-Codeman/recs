@@ -1459,8 +1459,8 @@ dependencies = [
 
 [[package]]
 name = "system"
-version = "2.1.4"
-source = "git+https://github.com/Dj-Codeman/system.git#d46e5476799aa7ebb7a3008c7c2e3696a6526b00"
+version = "2.2.6"
+source = "git+https://github.com/Dj-Codeman/system.git#28c69ce3942473833967c0644494f8dfdaccbba7"
 dependencies = [
  "cfg_rust_features",
  "flate2",
