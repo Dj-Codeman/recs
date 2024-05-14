@@ -1,7 +1,7 @@
 use logging::append_log;
 use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
-use system::{errors::SystemError, make_dir, path_present, ClonePath, PathType}; // for finding free ram for vectors
+use system::{errors::{ErrorArray, UnifiedResult as uf, WarningArray}, functions::{make_dir, path_present}, types::{ClonePath, PathType}};
 
 use crate::{
     array::{generate_system_array, index_system_array},
@@ -53,7 +53,7 @@ impl SystemPaths {
 
 // !  enviornment as in program
 
-pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
+pub fn set_system(debug: bool, mut errors: ErrorArray, mut warnings: WarningArray) -> uf<()> {
     // This functions is responsible for creating the dir tree,
     // It also monitors the output of the functions that create keys and indexs for them
     match make_folders(debug) {
@@ -61,15 +61,16 @@ pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
         Err(e) => return Err(e),
     };
 
-    match generate_system_array() {
+    match generate_system_array(errors).uf_unwrap() {
         Ok(_) => {
-            let _ = match index_system_array() {
+            let _ = match index_system_array(errors, warnings).uf_unwrap() {
                 Ok(_) => append_log(
                     unsafe { PROGNAME },
                     "System array has been created and indexed",
+                    errors
                 ),
 
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             };
         }
         Err(e) => return Err(e),
@@ -82,11 +83,11 @@ pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
 }
 
 // ! enviornment as in file paths
-fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
+fn make_folders(debug: bool, mut errors: ErrorArray) -> uf<()> {
     // * Verifing path exists and creating missing ones
     let system_paths: SystemPaths = SystemPaths::new();
 
-    match path_present(&system_paths.SYSTEM_PATH) {
+    match path_present(&system_paths.SYSTEM_PATH, errors).uf_unwrap() {
         Ok(b) => match b {
             true => {
                 // we're ok to populate folder tree
@@ -96,15 +97,16 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
                 paths.insert(2, system_paths.META.clone());
 
                 for path in paths.iter() {
-                    let _ = match make_dir(path.clone_path()) {
-                        Ok(_) => match debug {
+                    match make_dir(&path.clone_path(), errors).uf_unwrap() {
+                        Ok(d) => match debug {
                             true => append_log(
                                 unsafe { PROGNAME },
                                 &format!("Path : {} created", &path),
+                                errors
                             ),
-                            false => Ok(()),
+                            false => return uf::new(Ok(())),
                         },
-                        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                        Err(e) => return uf::new(Err(e)),
                     };
                 }
             }

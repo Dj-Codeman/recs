@@ -1,18 +1,19 @@
-use logging::{append_log, errors::MyErrors};
+use logging::append_log;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{File, OpenOptions},
+    fs::File,
     io::{prelude::*, SeekFrom},
     str,
 };
 use system::{
-    create_hash, del_dir, del_file, errors::SystemError, path_present, ClonePath, PathType,
+    errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray},
+    functions::{create_hash, del_dir, del_file, open_file, path_present},
+    types::PathType,
 };
 
 use crate::{
     config::{ARRAY_LEN, CHUNK_SIZE},
     encrypt::create_secure_chunk,
-    errors::{RecsError, RecsErrorType, RecsRecivedErrors},
     local_env::{SystemPaths, VERSION},
     PROGNAME,
 };
@@ -39,34 +40,37 @@ pub fn array_arimitics() -> u32 {
     return total_chunks;
 }
 
-pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
+pub fn generate_system_array(mut errors: ErrorArray) -> uf<bool> {
     let system_paths: SystemPaths = SystemPaths::new();
-    match append_log(unsafe { PROGNAME }, "Creating system array") {
+    match append_log(unsafe { PROGNAME }, "Creating system array", errors.clone()).uf_unwrap() {
         Ok(_) => (),
-        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+        Err(e) => return uf::new(Err(e)),
     };
 
     // Remove the existing system array directory
-    let _ = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION);
+    let _ = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone());
 
     // Create the system array contents
     let system_array_contents = create_system_array_contents();
 
     // Write the system array contents to the file
-    match write_system_array_to_file(&system_array_contents) {
+    match write_system_array_to_file(&system_array_contents, errors.clone()).uf_unwrap() {
         Ok(_) => {
-            match append_log(unsafe { PROGNAME }, "Created system array") {
+            match append_log(unsafe { PROGNAME }, "Created system array", errors.clone())
+                .uf_unwrap()
+            {
                 Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::repack(e)),
+                Err(e) => return uf::new(Err(e)),
             };
-            return Ok(true);
+            return uf::new(Ok(true));
         }
         Err(e) => {
             let _ = append_log(
                 unsafe { PROGNAME },
                 &format!("Could not write the system_array to the path specified: "),
+                errors.clone(),
             );
-            return Err(e);
+            return uf::new(Err(e));
         }
     }
 }
@@ -84,35 +88,27 @@ fn create_system_array_contents() -> String {
     )
 }
 
-fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
+fn write_system_array_to_file(contents: &str, mut errors: ErrorArray) -> uf<()> {
     let system_paths: SystemPaths = SystemPaths::new();
-    let mut system_array_file = OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .append(true)
-        .open(system_paths.SYSTEM_ARRAY_LOCATION.to_owned())
-        .map_err(|e| {
-            let _ = append_log(unsafe { PROGNAME }, &e.to_string());
-            RecsRecivedErrors::SystemError(SystemError::new_details(
-                system::errors::SystemErrorType::ErrorCreatingFile,
-                &e.to_string(),
-            ))
-        })?;
 
-    write!(system_array_file, "{}", contents).map_err(|e| {
-        let _ = append_log(unsafe { PROGNAME }, &e.to_string());
-        RecsRecivedErrors::SystemError(SystemError::new_details(
-            system::errors::SystemErrorType::ErrorCreatingFile,
-            &e.to_string(),
-        ))
-    })?;
+    let mut system_array_file: File =
+        match open_file(system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
+            Ok(d) => d,
+            Err(e) => return uf::new(Err(e)),
+        };
 
-    Ok(())
+    match write!(system_array_file, "{}", contents) {
+        Ok(d) => return uf::new(Ok(())),
+        Err(e) => {
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
+        }
+    }
 }
 
 // indexing the created array
 
-pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
+pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<bool> {
     let mut chunk_number: u32 = 1;
     let mut range_start: u32 = BEG_CHAR;
     let mut range_end: u32 = BEG_CHAR + CHUNK_SIZE as u32;
@@ -120,21 +116,17 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
     #[allow(unused_assignments)] // * cheap fix
     let mut chunk: String = String::new();
 
-    let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION.to_string()) {
+    let mut file = match open_file(system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
         Ok(d) => d,
-        Err(e) => {
-            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                system::errors::SystemErrorType::ErrorOpeningFile,
-                &e.to_string(),
-            )))
-        }
+        Err(e) => return uf::new(Err(e)),
     };
 
     if (range_end - range_start) < CHUNK_SIZE as u32 {
-        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-            RecsErrorType::SecretArrayError,
-            "Invalid secret chunk length",
-        )));
+        errors.push(ErrorArrayItem::new(
+            SE::SecretArray,
+            format!("Invalid secret chunk length"),
+        ));
+        return uf::new(Err(errors));
     }
 
     loop {
@@ -145,10 +137,8 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
         match file.seek(SeekFrom::Start(range_start as u64)) {
             Ok(d) => d,
             Err(e) => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    system::errors::SystemErrorType::ErrorReadingFile,
-                    &format!("Failed to set seek head: {}", e.to_string()),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
@@ -170,51 +160,42 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                 let chunk_map_path: PathType =
                     PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
 
-                if path_present(&chunk_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
-                    match del_file(chunk_map_path.clone_path()) {
-                        Ok(_) => (),
-                        Err(e) => return Err(RecsRecivedErrors::repack(MyErrors::SystemError(e))),
-                    };
+                match path_present(&chunk_map_path, errors.clone()).uf_unwrap() {
+                    Ok(_) => (),
+                    Err(e) => match del_file(chunk_map_path, e, warnings).uf_unwrap() {
+                        Ok(_) => todo!(),
+                        Err(e) => return uf::new(Err(e)),
+                    },
                 }
 
                 let pretty_chunk_map = match serde_json::to_string_pretty(&chunk_map) {
                     Ok(d) => d,
                     Err(e) => {
-                        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                            RecsErrorType::JsonCreationError,
-                            &e.to_string(),
-                        )))
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
                     }
                 };
 
-                let mut chunk_map_file = match OpenOptions::new()
-                    .create_new(true)
-                    .write(true)
-                    .append(true)
-                    .open(&chunk_map_path)
+                let mut chunk_map_file = match open_file(chunk_map_path, errors.clone()).uf_unwrap()
                 {
                     Ok(d) => d,
-                    Err(e) => {
-                        return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                            system::errors::SystemErrorType::ErrorOpeningFile,
-                            &e.to_string(),
-                        )))
-                    }
+                    Err(e) => return uf::new(Err(e)),
                 };
 
                 match write!(chunk_map_file, "{}", pretty_chunk_map) {
                     Ok(_) => match append_log(
                         unsafe { PROGNAME },
                         &format!("The map file {} has been created", &chunk_map_path),
-                    ) {
+                        errors.clone(),
+                    )
+                    .uf_unwrap()
+                    {
                         Ok(_) => (),
-                        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+                        Err(e) => return uf::new(Err(e)),
                     },
                     Err(e) => {
-                        return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                            system::errors::SystemErrorType::ErrorOpeningFile,
-                            &e.to_string(),
-                        )))
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
                     }
                 };
             }
@@ -227,20 +208,23 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
         range_end += CHUNK_SIZE as u32;
     }
 
-    match append_log(unsafe { PROGNAME }, "Indexed system array !") {
+    match append_log(
+        unsafe { PROGNAME },
+        "Indexed system array !",
+        errors.clone(),
+    )
+    .uf_unwrap()
+    {
         Ok(_) => (),
-        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+        Err(e) => return uf::new(Err(e)),
     };
-    Ok(true)
+    uf::new(Ok(true))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // Mock functions or constants for testing
-    // const PROGNAME: &str = "TEST_PROG";
-    const VERSION: &str = "R1.0.2"; // Adjust the version as needed
+    use VERSION;
 
     #[test]
     fn test_create_system_array_contents() {
@@ -252,6 +236,4 @@ mod tests {
         assert!(result.starts_with(&expected_header));
         assert!(result.ends_with(expected_footer));
     }
-
-    // Add more tests as needed
 }

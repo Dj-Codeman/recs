@@ -8,6 +8,8 @@
         "./Cargo.toml"
     ],
     "cSpell.words": [
+        "arimitics",
+        "hmac",
         "PROGNAME"
     ]
 }

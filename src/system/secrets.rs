@@ -9,9 +9,9 @@ use std::{
     io::{prelude::*, SeekFrom},
 };
 use system::{
-    create_hash, del_dir, del_file,
-    errors::{SystemError, SystemErrorType},
-    path_present, truncate, ClonePath, PathType,
+    errors::{ErrorArray, ErrorArrayItem, Errors as SE, OkWarning, UnifiedResult as uf, WarningArray, WarningArrayItem},
+    functions::{create_hash, del_dir, del_file, open_file, path_present, truncate},
+    types::{ClonePath, PathType},
 };
 
 // self and create are user made code
@@ -20,10 +20,6 @@ use crate::{
     array_tools::fetch_chunk,
     auth::create_writing_key,
     encrypt::{decrypt, encrypt},
-    errors::{
-        RecsError, RecsErrorType, RecsRecivedErrors, RecsRecivedWarnings, RecsWarning,
-        RecsWarningType,
-    },
     local_env::{calc_buffer, SystemPaths, VERSION},
     DEBUGGING, PROGNAME,
 };
@@ -48,7 +44,7 @@ pub fn write(
     secret_owner: String,
     secret_name: String,
     fixed_key: bool,
-// ) -> Result<(String, usize), RecsRecivedErrors> {
+    mut errors: ErrorArray,
 ) -> uf<(String, usize)> {
     // String is key data, The u16 is the chunk cound
     //TODO Dep or simplyfy
@@ -56,11 +52,8 @@ pub fn write(
     let file_size: u64 = match metadata(&filename) {
         Ok(d) => d.len(),
         Err(e) => {
-            warn(&e.to_string());
-            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                system::errors::SystemErrorType::ErrorReadingFile,
-                &e.to_string(),
-            )));
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
         }
     };
     // We're are trying to balance the speed and performance here
@@ -73,10 +66,15 @@ pub fn write(
     let fit_buffer: usize = match (file_size).try_into() {
         Ok(d) => d,
         Err(e) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InvalidBufferFit,
-                &e.to_string(),
-            )))
+            let err = ErrorArrayItem::new(
+                SE::GeneralError,
+                format!(
+                    "The buffer requested wont cast to usize?: {}",
+                    e.to_string()
+                ),
+            );
+            errors.push(err);
+            return uf::new(Err(errors));
         }
     };
     let buffer_size: usize = if fit_buffer <= max_buffer_size {
@@ -86,19 +84,16 @@ pub fn write(
     };
 
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
-    match append_log(unsafe { PROGNAME }, &msg) {
+    match append_log(unsafe { PROGNAME }, &msg, errors.clone()).uf_unwrap() {
         Ok(_) => (),
-        Err(e) => {
-            warn("Error while reading logs");
-            return Err(RecsRecivedErrors::repack(e));
-        }
+        Err(e) => return uf::new(Err(e)),
     };
 
     warn(&filename.to_string());
     let system_paths: SystemPaths = SystemPaths::new();
 
     // testing if the file exists
-    let filename_existence: bool = path_present(&filename).unwrap();
+    let filename_existence: bool = path_present(&filename, errors.clone()).unwrap();
 
     if filename_existence {
         // creating the encrypted meta data file
@@ -121,10 +116,8 @@ pub fn write(
         let canon_path: PathType = match canonicalize(&filename) {
             Ok(d) => PathType::PathBuf(d),
             Err(e) => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    system::errors::SystemErrorType::ErrorReadingFile,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
@@ -155,33 +148,30 @@ pub fn write(
         let pretty_data_map: Vec<u8> = match serde_json::to_vec_pretty(&secret_data_struct) {
             Ok(d) => d,
             Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::JsonCreationError,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
         let cipher_data_map: String = match encrypt(
             pretty_data_map,
-            match fetch_chunk_helper(1) {
+            match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
                 Ok(d) => d.into(),
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             },
             1024,
-        ) {
+            errors.clone(),
+        ).uf_unwrap() {
             // ! system files like keys and maps are set to 1024 for buffer to make reading simple
             Ok(d) => d,
-            Err(e) => return Err(e),
+            Err(e) => return uf::new(Err(e)),
         };
 
         // TODO Stream this data with the buffer functions we have already
         let mut file = match File::open(&filename) {
             Ok(f) => f,
             Err(e) => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    system::errors::SystemErrorType::ErrorOpeningFile,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
@@ -193,47 +183,22 @@ pub fn write(
         let mut range_end: u64 = buffer_size as u64;
 
         // ! making the secret path to append data too
-        let mut secret_file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .append(true)
-            .open(&secret_path);
+        let secret_file = open_file(secret_path, errors.clone()).uf_unwrap();
 
-        match secret_file {
-            Ok(_) => {
-                let _ = append_log(
-                    unsafe { PROGNAME },
-                    &format!("File created: {}", &secret_path),
-                );
-            }
-            Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                let _ = append_log(
-                    unsafe { PROGNAME },
-                    &format!("The file already exists {}", &secret_path),
-                );
-                return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                    RecsErrorType::Error,
-                )));
-            }
-            Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::Error,
-                    &e.to_string(),
-                )));
-            }
-        }
+        let mut file = match secret_file {
+            Ok(d) => d.try_clone().unwrap(),
+            Err(e) => return uf::new(Err(e)),
+        };
 
         // ! reading the chunks
         loop {
-            let _range_len = range_end - range_start; // ? maybe store this to make reading simpeler
+            let _range_len = range_end - range_start; // ? maybe store this to make reading simpler
                                                       // Setting the pointer and cursors before the read
             match file.seek(SeekFrom::Start(range_start as u64)) {
                 Ok(d) => d,
                 Err(e) => {
-                    return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                        system::errors::SystemErrorType::ErrorReadingFile,
-                        &format!("Failed to set seek head: {}", e.to_string()),
-                    )))
+                    errors.push(ErrorArrayItem::from(e));
+                    return uf::new(Err(errors));
                 }
             };
 
@@ -257,67 +222,37 @@ pub fn write(
                     let secret_buffer = match encrypt(
                         encoded_buffer.as_bytes().to_vec(),
                         match create_writing_key(
-                            match fetch_chunk_helper(num) {
+                            match fetch_chunk_helper(num, errors.clone()).uf_unwrap() {
                                 Ok(d) => d,
-                                Err(e) => return Err(e),
+                                Err(e) => return uf::new(Err(e)),
                             },
                             fixed_key,
-                        ) {
+                            errors.clone()
+                        ).uf_unwrap() {
                             // TODO ^ Simplyfy this. It is I/o intensive needed multiple files calls multiple times a second
                             Ok(d) => d.into(),
-                            Err(e) => return Err(e),
+                            Err(e) => return uf::new(Err(e)),
                         },
                         buffer_size,
-                    ) {
+                        errors.clone()
+                    ).uf_unwrap() {
                         Ok(d) => d,
-                        Err(e) => return Err(e),
+                        Err(e) => return uf::new(Err(e)),
                     };
 
                     // this is the one var thatll be pushed to file
                     let mut processed_chunk: String = String::new();
                     processed_chunk.push_str(&signature);
                     processed_chunk.push_str(&secret_buffer);
-                    // ! THIS IS WHERER THE FILE IS OPENED
+                    // ! THIS IS WHERE THE FILE IS OPENED
 
-                    let result: Result<(), RecsRecivedErrors> = match secret_file.as_mut() {
-                        Ok(file) => write!(file, "{}", processed_chunk).map_err(|_| {
-                            RecsRecivedErrors::SystemError(SystemError::new(
-                                SystemErrorType::ErrorOpeningFile,
-                            ))
-                        }),
-                        Err(e) => Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                            RecsErrorType::Error,
-                            &e.to_string(),
-                        ))),
-                    };
 
-                    if let Err(e) = result {
-                        match e {
-                            RecsRecivedErrors::LoggerError(ed) => {
-                                let _ = append_log(
-                                    unsafe { PROGNAME },
-                                    &format!("UNUSED: an error occoured while logging: {:?}", ed),
-                                );
-                                return Err(RecsRecivedErrors::LoggerError(ed));
-                            }
-                            RecsRecivedErrors::SystemError(ed) => {
-                                let _ = append_log(
-                                    unsafe { PROGNAME },
-                                    &format!(
-                                        "A system error has occoured while writing to file: {:?}",
-                                        ed
-                                    ),
-                                );
-                                return Err(RecsRecivedErrors::SystemError(ed));
-                            }
-                            RecsRecivedErrors::RecsError(ed) => {
-                                let _ = append_log(
-                                    unsafe { PROGNAME },
-                                    &format!("RECS ERROR: {:?}", ed),
-                                );
-                                return Err(RecsRecivedErrors::RecsError(ed));
-                            }
-                        }
+                    match write!(file, "{}", processed_chunk){
+                        Ok(_) => (),
+                        Err(e) => {
+                            errors.push(ErrorArrayItem::from(e));
+                            return uf::new(Err(errors));
+                        },
                     };
 
                     // * DONE RUN THE NEXT CHUNK */
@@ -327,14 +262,13 @@ pub fn write(
                     let _ = append_log(
                         unsafe { PROGNAME },
                         &format!("Finished reading data from {}", &filename),
+                        errors.clone()
                     );
                     break;
                 }
                 Err(e) => {
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                        RecsErrorType::Error,
-                        &e.to_string(),
-                    )))
+                    errors.push(ErrorArrayItem::from(e));
+                    return uf::new(Err(errors));
                 }
             }
 
@@ -347,7 +281,7 @@ pub fn write(
             encoded_buffer = "".to_string();
         }
 
-        // writting to secret data json file
+        // writing to secret data json file
         let mut secret_map_file = OpenOptions::new()
             .create_new(true)
             .write(true)
@@ -356,77 +290,69 @@ pub fn write(
 
         // TODO ERROR HANDELING
         match secret_map_file {
-            Ok(_) => match append_log(&unsafe { PROGNAME }, "new secret map created") {
+            Ok(_) => match append_log(&unsafe { PROGNAME }, "new secret map created", errors.clone()).uf_unwrap() {
                 Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::repack(e)),
+                Err(e) => return uf::new(Err(e)),
             },
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                match del_dir(&secret_path) {
+                match del_dir(&secret_path, errors.clone()).uf_unwrap() {
                     Ok(_) => (),
-                    Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                    Err(e) => return uf::new(Err(e)),
                 };
-                match append_log( &unsafe { PROGNAME }, "The json associated with this file id already exists. Nothing has been deleted.") {
+                match append_log( &unsafe { PROGNAME }, "The json associated with this file id already exists. Nothing has been deleted.", errors.clone()).uf_unwrap() {
                     Ok(_) => (),
-                    Err(e) => return Err(RecsRecivedErrors::repack(e)),
+                    Err(e) => return uf::new(Err(e)),
                 };
-                return Err(RecsRecivedErrors::SystemError(SystemError::new(
-                    system::errors::SystemErrorType::ErrorCreatingFile,
-                )));
             }
-            Err(_) => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    system::errors::SystemErrorType::ErrorCreatingFile,
-                    "An error occoured while creating maps",
-                )));
+            Err(e) => {
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
         match write!(
             match secret_map_file.as_mut() {
                 Ok(d) => d,
-                Err(e) =>
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                        RecsErrorType::Error,
-                        &e.to_string()
-                    ))),
+                Err(e) =>{
+                    errors.push(ErrorArrayItem::from(*e));
+                    return uf::new(Err(errors));
+                }
             },
             "{}",
             cipher_data_map
         ) {
             Ok(()) => (),
             Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::Error,
-                    &format!("Couldn't write encrypted data {}", &e.to_string()),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
         // resolving the key data
         let key_data: String = match create_writing_key(
-            match fetch_chunk_helper(num) {
+            match fetch_chunk_helper(num, errors).uf_unwrap() {
                 Ok(d) => d,
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             },
             fixed_key,
-        ) {
+            errors
+        ).uf_unwrap() {
             Ok(d) => d,
-            Err(e) => return Err(e),
+            Err(e) => return uf::new(Err(e)),
         };
-        return Ok((key_data, chunk_count));
+        return uf::new(Ok((key_data, chunk_count)));
     } else {
         let _ = append_log(
             unsafe { PROGNAME },
             &format!("Warning {} doesn't exist", &filename),
+            errors.clone()
         );
-        return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-            SystemErrorType::ErrorOpeningFile,
-            &format!("Warning {} doesn't exist", &filename),
-        )));
+        errors.push(ErrorArrayItem::new(SE::OpeningFile, format!("The file: {} doesn't exist",&filename)));
+        return uf::new(Err(errors));
     }
 }
 
-pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedErrors> {
+pub fn write_raw(data: Vec<u8>, mut errors: ErrorArray, warnings: WarningArray) -> uf<(String, String, usize)> {
     // Key_Data Cipher_Data Chunk_Count
     let dummy_path: PathType = PathType::Str("/tmp/dummy.recs".into());
     let dummy_owner: &str = "owner";
@@ -438,10 +364,8 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
     let mut dummy_file: File = match File::create(dummy_path.clone_path()) {
         Ok(f) => f,
         Err(e) => {
-            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                SystemErrorType::ErrorOpeningFile,
-                &format!("Couldn't create the temp file: {}", e),
-            )))
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
         }
     };
 
@@ -449,20 +373,19 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
     match dummy_file.write_all(&data) {
         Ok(_) => (),
         Err(e) => {
-            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                SystemErrorType::ErrorOpeningFile,
-                &format!("Error while reading dummy file: {:?}", &e.to_string()),
-            )))
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
         }
     };
 
     // encrypting the dummy file
-    let results: Result<(String, usize), RecsRecivedErrors> = write(
+    let results: Result<(String, usize), ErrorArray> = write(
         dummy_path,
         dummy_owner.to_string(),
         dummy_name.to_string(),
         true,
-    );
+        errors.clone()
+    ).uf_unwrap();
 
     match results {
         Ok((data, count)) => {
@@ -477,71 +400,62 @@ pub fn write_raw(data: Vec<u8>) -> Result<(String, String, usize), RecsRecivedEr
             let cipher_map_data: String = match read_to_string(secret_map_path) {
                 Ok(d) => d,
                 Err(e) => {
-                    return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                        system::errors::SystemErrorType::ErrorOpeningFile,
-                        &e.to_string(),
-                    )))
-                }
-            };
-            let key_data: String = match fetch_chunk_helper(1) {
+                    errors.push(ErrorArrayItem::from(e));
+                    return uf::new(Err(errors));
+                    }
+                };
+            let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
                 Ok(d) => d,
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             };
 
-            let secret_map_data: Vec<u8> = match decrypt(&cipher_map_data, &key_data) {
+            let secret_map_data: Vec<u8> = match decrypt(&cipher_map_data, &key_data, errors.clone()).uf_unwrap() {
                 Ok(d) => d,
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             };
             let secret_map: SecretDataIndex =
                 match serde_json::from_str(&String::from_utf8_lossy(&secret_map_data)) {
                     Ok(d) => d,
                     Err(e) => {
-                        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                            RecsErrorType::JsonReadingError,
-                            &format!(
-                                "Json data decrypted in write function was garbage: {:?}, {}",
-                                &secret_map_data, e
-                            ),
-                        )))
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
                     }
                 };
             // pulling info from the map
             // ensure the data is there
-            match path_present(&secret_map.secret_path) {
+            match path_present(&secret_map.secret_path, errors.clone()).uf_unwrap() {
                 Ok(b) => match b {
                     true => (),
                     false => {
                         let _ = append_log(
                             unsafe { PROGNAME },
                             "THE DATA FILE SPECIFIED DOES NOT EXIST",
+                            errors.clone()
                         );
-                        return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                            RecsErrorType::Error,
-                        )));
+                    errors.push(ErrorArrayItem::new(SE::GeneralError, format!("The data file doesn't exist")));
+                    return uf::new(Err(errors));
                     }
                 },
-                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                Err(e) => return uf::new(Err(e)),
             }
 
             // reading and printing the file
             let recs_data: String = match read_to_string(&secret_map.secret_path) {
                 Ok(data) => data.replace("\n", ""),
                 Err(e) => {
-                    return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                        SystemErrorType::ErrorReadingFile,
-                        &e.to_string(),
-                    )))
+                    errors.push(ErrorArrayItem::from(e));
+                    return uf::new(Err(errors));
                 }
             };
 
-            match forget(dummy_owner.to_owned(), dummy_name.to_owned()) {
+            match forget(dummy_owner.to_owned(), dummy_name.to_owned(),errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(_) => (),
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             };
 
-            return Ok((key, recs_data, count));
+            return uf::new(Ok((key, recs_data, count)));
         }
-        Err(e) => return Err(e),
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
@@ -549,13 +463,15 @@ pub fn read_raw(
     data: String,
     key: String,
     chunks: usize,
-) -> Result<(Vec<Option<RecsRecivedWarnings>>, Vec<u8>), RecsRecivedErrors> {
+    mut errors: ErrorArray,
+    mut warnings: WarningArray
+) -> uf<OkWarning<Vec<u8>>> {
     // Recreating the cipher chunk size
     let secret_size: usize = data.chars().count();
     let secret_divisor: usize = chunks;
     let new_buffer_size: usize = secret_size / secret_divisor;
 
-    // * Defing the initial parameters to start reading from string
+    // * Define the initial parameters to start reading from string
     // defining the initial pointer range and sig chunk
 
     let mut range_start: usize = 0;
@@ -570,78 +486,64 @@ pub fn read_raw(
     loop {
         // Setting the pointer and cursors before the read
 
-        // ! handeling the file reading and outputs
+        // ! handling the file reading and outputs
         while range_start < data.len() {
             let chunk: &str = &data[range_start..range_end];
             let secret_buffer: String = match std::str::from_utf8(chunk.as_bytes()) {
                 // This function is reading the hex data from the file, It SHOULD be a string
                 Ok(s) => s.to_owned(),
                 Err(e) => {
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                        RecsErrorType::InvalidUtf8Data,
-                        &e.to_string(),
-                    )))
+                    errors.push(ErrorArrayItem::from(e));
+                    return uf::new(Err(errors));
                 }
             };
 
             // take the first spliiting chunk into signature and cipher data
             let encoded_signature: &str = truncate(&secret_buffer, 64);
-            // ! When this inevidably fails, Remember the paddingcount() changes the sig legnth.
+            // ! When this inevitably fails, Remember the paddingcount() changes the sig legnth.
             let cipher_buffer: &str = &secret_buffer[64..]; // * this is the encrypted hex encoded bytes
 
             // * decrypting the chunk
-            let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &key) {
+            let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &key, errors.clone()).uf_unwrap() {
                 Ok(d) => d, // TODO find a more efficient way to do this
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             };
 
             encoded_buffer.append(&mut decrypted_data);
 
-            // * handeling decoding the signature
+            // * handling decoding the signature
             // ? This mess decodes the vec array into a hex encoded string, then reads that into a normal &string
 
             let signature_utf8: Result<String, std::string::FromUtf8Error> =
                 String::from_utf8(match hex::decode(encoded_signature) {
                     Ok(d) => d,
                     Err(e) => {
-                        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                            RecsErrorType::InvalidHexData,
-                            &format!(
-                                "An error occoured while reading signature {}",
-                                &e.to_string()
-                            ),
-                        )))
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
                     }
                 });
 
             let signature_data: String = match signature_utf8 {
                 Ok(d) => d,
                 Err(e) => {
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                        RecsErrorType::InvalidUtf8Data,
-                        &format!(
-                            "An error occoured while reading signature {}",
-                            &e.to_string()
-                        ),
-                    )))
+                    errors.push(ErrorArrayItem::from(e));
+                    return uf::new(Err(errors));
                 }
             };
 
             signature += &signature_data;
 
-            // ! After 9 chuncks an HMAC error is thrown because the sig size is not updated
+            // ! After 9 chucks an HMAC error is thrown because the sig size is not updated
             // ! ^ This should be remedied
             // !? Verify the signature integrity
-            match verify_signature(&encoded_buffer, signature.as_str(), signature_count) {
+            match verify_signature(&encoded_buffer, signature.as_str(), signature_count, warnings.clone(), errors.clone()).uf_unwrap() {
                 Ok(w) => {
                     // * This is where the decoded bytes are retrived
                     let mut plain_result: Vec<u8> = match hex::decode(encoded_buffer.clone()) {
                         Ok(d) => d,
                         Err(e) => {
-                            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                                RecsErrorType::InvalidTypeGiven,
-                                &e.to_string(),
-                            )))
+                            errors.push(ErrorArrayItem::from(e));
+                            return uf::new(Err(errors));
                         }
                     };
 
@@ -655,11 +557,14 @@ pub fn read_raw(
                     signature = "".to_string();
 
                     match range_start >= secret_size {
-                        true => return Ok((w, plain_buffer)),
+                        true => return uf::new(Ok(OkWarning{
+                            data: plain_buffer,
+                            warning: w.warning,
+                        })),
                         false => (),
                     }
                 }
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             }
         }
     }
@@ -671,11 +576,13 @@ pub fn read(
     secret_name: String,
     owner_uid: u32,
     fixed_key: bool,
-) -> Result<(PathType, PathType, Vec<Option<RecsRecivedWarnings>>), RecsRecivedErrors> {
+    mut errors: ErrorArray,
+    mut warnings: WarningArray
+) -> uf<OkWarning<(PathType, PathType)>> {
     // creating the secret json path
-    match append_log(unsafe { PROGNAME }, "Decrypting request") {
+    match append_log(unsafe { PROGNAME }, "Decrypting request", errors.clone()).uf_unwrap() {
         Ok(_) => (),
-        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+        Err(e) => return uf::new(Err(e)),
     };
     let system_paths: SystemPaths = SystemPaths::new();
     let secret_map_path: PathType = PathType::Content(format!(
@@ -687,64 +594,49 @@ pub fn read(
     if secret_json_existence {
         let cipher_map_data: String =
             read_to_string(secret_map_path).expect("Couldn't read the map file");
-        let key_data: String = match fetch_chunk_helper(1) {
+        let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
             Ok(d) => d,
-            Err(e) => return Err(e),
+            Err(e) => return uf::new(Err(e)),
         };
 
-        let secret_map_data = match decrypt(&cipher_map_data, &key_data) {
+        let secret_map_data = match decrypt(&cipher_map_data, &key_data,errors.clone()).uf_unwrap() {
             Ok(d) => d,
-            Err(e) => return Err(e),
+            Err(e) => return uf::new(Err(e)),
         };
         let secret_map: SecretDataIndex = match serde_json::from_slice(&secret_map_data) {
             Ok(d) => d,
             Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::JsonReadingError,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
         let _ = match unsafe { DEBUGGING } {
             Some(bug) => match bug {
-                true => append_log(unsafe { PROGNAME }, &format!("{:?}", secret_map)),
-                false => append_log(unsafe { PROGNAME }, &format!("Secret map data recived")),
+                true => append_log(unsafe { PROGNAME }, &format!("{:?}", secret_map,), errors.clone()),
+                false => append_log(unsafe { PROGNAME }, &format!("Secret map data recived"), errors.clone()),
             },
-            None => append_log(unsafe { PROGNAME }, &format!("Secret map data recived")),
+            None => append_log(unsafe { PROGNAME }, &format!("Secret map data recived"), errors.clone()),
         };
 
-        let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![None];
-
-        // ! Validating that we can mess with this data
-        warnings.push(match secret_map.version == VERSION {
-            true => None,
-            false => {
-                let _ = append_log(
-                    unsafe { PROGNAME },
-                    "Data from and older version of recs attempting to read anyway",
-                );
-                Some(RecsRecivedWarnings::RecsWarning(RecsWarning::new(
-                    RecsWarningType::OutdatedVersion,
-                )))
-            }
-        });
+        if secret_map.version != VERSION {
+            warnings.push(WarningArrayItem::new_details(system::errors::Warnings::Warning, "Signature hash doesn't align".to_string()))
+        }
 
         // Creating a temp filename to write the data too so we can change the owner and
         // ensure the data is there
-        let temp_name: String = match path_present(&secret_map.secret_path) {
+        let temp_name: String = match path_present(&secret_map.secret_path, errors.clone()).uf_unwrap() {
             Ok(b) => match b {
                 // This ensure the tmp path are more likely to be unique
                 true => {
                     truncate(&create_hash(secret_map.secret_path.to_string())[5..], 10).to_owned()
                 }
                 false => {
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                        RecsErrorType::InvalidFile,
-                    )))
+                    errors.push(ErrorArrayItem::new(SE::InvalidFile, "secret map path not found".to_string()));
+                    return uf::new(Err(errors));
                 }
             },
-            Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+            Err(e) => return uf::new(Err(e)),
         };
 
         // really dumb way to get random int
@@ -759,21 +651,22 @@ pub fn read(
             temp_name,
             since_the_epoch.as_secs()
         ));
-        match del_file(tmp_path.clone_path()) {
+        match del_file(tmp_path.clone_path(), errors.clone(), warnings).uf_unwrap() {
             Ok(_) => (),
-            Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+            Err(e) => return uf::new(Err(e)),
         };
 
         // generating the secret key for the file
         let writting_key: String = match create_writing_key(
-            match fetch_chunk_helper(secret_map.key) {
+            match fetch_chunk_helper(secret_map.key, errors.clone()).uf_unwrap() {
                 Ok(d) => d,
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             },
             fixed_key,
-        ) {
+            errors
+        ).uf_unwrap() {
             Ok(d) => d,
-            Err(e) => return Err(e),
+            Err(e) => return uf::new(Err(e)),
         };
 
         // Create chunk map from sig
@@ -784,19 +677,17 @@ pub fn read(
                     let _ = append_log(
                         unsafe { PROGNAME },
                         "The secret file has a size of zero, it is corrupted",
+                        errors.clone()
                     );
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                        RecsErrorType::Error,
-                    )));
+                    errors.push(ErrorArrayItem::new(SE::GeneralError, "Secret file is goofed up".to_string()));
+                    return uf::new(Err(errors));
                 } else {
                     d.len() as usize
                 }
             }
             Err(e) => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    SystemErrorType::ErrorReadingFile,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
         let secret_divisor: usize = secret_map.chunk_count as usize;
@@ -806,10 +697,8 @@ pub fn read(
         let mut file = match File::open(&secret_map.secret_path) {
             Ok(d) => d,
             Err(e) => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    SystemErrorType::ErrorOpeningFile,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
         // defining the initial pointer range and sig chunk
@@ -834,10 +723,8 @@ pub fn read(
         {
             Ok(d) => d,
             Err(e) => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    SystemErrorType::ErrorCreatingFile,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
@@ -847,23 +734,19 @@ pub fn read(
             match file.seek(SeekFrom::Start(range_start as u64)) {
                 Ok(d) => d,
                 Err(e) => {
-                    return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                        system::errors::SystemErrorType::ErrorReadingFile,
-                        &format!("Failed to set seek head: {}", e.to_string()),
-                    )))
+                    errors.push(ErrorArrayItem::from(e));
+                    return uf::new(Err(errors));
                 }
             };
 
-            // ! handeling the file reading and outputs
+            // ! handling the file reading and outputs
             match file.read_exact(&mut buffer) {
                 Ok(_) => {
                     let secret_buffer = match std::str::from_utf8(&buffer) {
                         Ok(s) => s.to_owned(),
                         Err(e) => {
-                            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                                RecsErrorType::InvalidTypeGiven,
-                                &e.to_string(),
-                            )))
+                            errors.push(ErrorArrayItem::from(e));
+                            return uf::new(Err(errors));
                         }
                     };
 
@@ -872,9 +755,9 @@ pub fn read(
                     let cipher_buffer: &str = &secret_buffer[64..];
 
                     // * decrypting the chunk
-                    let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &writting_key) {
+                    let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &writting_key, errors).uf_unwrap() {
                         Ok(d) => d,
-                        Err(e) => return Err(e),
+                        Err(e) => return uf::new(Err(e)),
                     };
 
                     encoded_buffer.append(&mut decrypted_data);
@@ -884,26 +767,16 @@ pub fn read(
                         String::from_utf8(match hex::decode(encoded_signature) {
                             Ok(d) => d,
                             Err(e) => {
-                                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                                    RecsErrorType::InvalidHexData,
-                                    &format!(
-                                        "An error occoured while reading signature {}",
-                                        &e.to_string()
-                                    ),
-                                )))
+                                errors.push(ErrorArrayItem::from(e));
+                                return uf::new(Err(errors));
                             }
                         });
 
                     let signature_data: String = match signature_utf8 {
                         Ok(d) => d,
                         Err(e) => {
-                            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                                RecsErrorType::InvalidUtf8Data,
-                                &format!(
-                                    "An error occoured while reading signature {}",
-                                    &e.to_string()
-                                ),
-                            )))
+                            errors.push(ErrorArrayItem::from(e));
+                            return uf::new(Err(errors));
                         }
                     };
 
@@ -913,31 +786,28 @@ pub fn read(
                     break;
                 }
                 Err(e) => {
-                    match append_log(unsafe { PROGNAME }, &e.to_string()) {
+                    match append_log(unsafe { PROGNAME }, &e.to_string(), errors.clone()).uf_unwrap() {
                         Ok(_) => (),
-                        Err(e) => return Err(RecsRecivedErrors::repack(e)),
+                        Err(e) => return uf::new(Err(e)),
                     };
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                        RecsErrorType::Error,
-                    )));
+                    errors.push(ErrorArrayItem::from(e));
+                    return uf::new(Err(errors));
                 }
             }
 
-            // ! After 9 chuncks an HMAC error is thrown because the sig size is not updated
+            // ! After 9 chucks an HMAC error is thrown because the sig size is not updated
             // ! ^ This should be remedied
             // !? Verify the signature integrity
             // let _sig_digit_count = truncate(&signature, 1);
-            match verify_signature(&encoded_buffer, signature.as_str(), signature_count) {
+            match verify_signature(&encoded_buffer, signature.as_str(), signature_count, warnings.clone(), errors.clone()).uf_unwrap() {
                 Ok(mut w) => {
                     // ? unencoding buffer
                     // * This is where the decoded bytes are retrived
                     let plain_result: Vec<u8> = match hex::decode(encoded_buffer.clone()) {
                         Ok(d) => d,
                         Err(e) => {
-                            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                                RecsErrorType::InvalidTypeGiven,
-                                &e.to_string(),
-                            )))
+                            errors.push(ErrorArrayItem::from(e));
+                            return uf::new(Err(errors));
                         }
                     };
 
@@ -945,10 +815,8 @@ pub fn read(
                     match plain_file.write_all(&plain_result) {
                         Ok(_) => (),
                         Err(e) => {
-                            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                                SystemErrorType::ErrorOpeningFile,
-                                &e.to_string(),
-                            )))
+                            errors.push(ErrorArrayItem::from(e));
+                            return uf::new(Err(errors));
                         }
                     }
 
@@ -959,9 +827,9 @@ pub fn read(
                     encoded_buffer.clear();
                     signature = "".to_string();
                     // ? appending any warning
-                    warnings.append(&mut w)
+                    warnings.append(w.warning)
                 }
-                Err(e) => return Err(e),
+                Err(e) => return uf::new(Err(e)),
             }
         }
         let _ = append_log(
@@ -970,40 +838,39 @@ pub fn read(
                 "Decrypting request: {} has been decrypted !",
                 &secret_map.file_path
             ),
+            errors.clone()
         );
         // changing file owner
         let safe_path = match canonicalize(&tmp_path) {
             Ok(d) => d,
             Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::InvalidFile,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
         match chown(&safe_path, Some(Uid::from_raw(owner_uid)), None) {
-            Ok(_) => return Ok((tmp_path, secret_map.file_path, warnings)), // return the temporary path and let the client handel it
+            Ok(_) => return uf::new(Ok(OkWarning{
+                data: (tmp_path, secret_map.file_path),
+                warning: warnings,
+            })), // return the temporary path and let the client handel it
             Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::Error,
-                    &e.to_string(),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         }
         // moving to the right dir
         // secret_map.file_path
     } else {
-        let _ = append_log(unsafe { PROGNAME }, "The secret map doen't exist");
-        return Err(RecsRecivedErrors::RecsError(RecsError::new(
-            RecsErrorType::InvalidMapData,
-        )));
+        let _ = append_log(unsafe { PROGNAME }, "The secret map doen't exist", errors.clone());
+        errors.push(ErrorArrayItem::new(SE::InvalidMapData, "Secret map not found".to_string()));
+        return uf::new(Err(errors));
     }
 }
 
-pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsRecivedErrors> {
+pub fn forget(secret_owner: String, secret_name: String, mut errors: ErrorArray, mut warnings: WarningArray) -> uf<()>{
     // creating the secret json file
-    let _ = append_log(unsafe { PROGNAME }, "Forgetting secret");
+    let _ = append_log(unsafe { PROGNAME }, "Forgetting secret", errors.clone());
     let system_paths: SystemPaths = SystemPaths::new();
     let secret_map_path = PathType::Content(format!(
         "{}/{}-{}.meta",
@@ -1011,70 +878,75 @@ pub fn forget(secret_owner: String, secret_name: String) -> Result<(), RecsReciv
     ));
 
     // testing if the secret json exists before starting encryption
-    if path_present(&secret_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
-        let cipher_map_data: String = match read_to_string(&secret_map_path) {
-            Ok(d) => d,
-            Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::JsonReadingError,
-                    &e.to_string(),
-                )))
-            }
-        };
+    match path_present(&secret_map_path, errors.clone()).uf_unwrap() {
+        Ok(d) => match d {
+            true => {
+                let cipher_map_data: String = match read_to_string(&secret_map_path) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
+                    }
+                };
 
-        let key_data: String = match fetch_chunk_helper(1) {
-            Ok(d) => d,
-            Err(e) => return Err(e),
-        };
+                let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+                    Ok(d) => d,
+                    Err(e) => return uf::new(Err(e)),
+                };
 
-        let secret_map_data = match decrypt(&cipher_map_data, &key_data) {
-            Ok(d) => d,
-            Err(e) => return Err(e),
-        };
-        let secret_map: SecretDataIndex = match serde_json::from_slice(&secret_map_data) {
-            Ok(d) => d,
-            Err(e) => {
-                return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                    RecsErrorType::JsonReadingError,
-                    &e.to_string(),
-                )))
-            }
-        };
+                let secret_map_data = match decrypt(&cipher_map_data, &key_data, errors.clone()).uf_unwrap() {
+                    Ok(d) => d,
+                    Err(e) => return uf::new(Err(e)),
+                };
 
-        if path_present(&secret_map.secret_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
-            match del_file(secret_map.secret_path) {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-            };
-        }
-        match del_file(secret_map_path.clone_path()) {
-            Ok(_) => {
-                _ = append_log(
-                    unsafe { PROGNAME },
-                    &format!("{} has been deleted", &secret_map_path),
-                )
-            }
-            Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
-        };
+                let secret_map: SecretDataIndex = match serde_json::from_slice(&secret_map_data) {
+                    Ok(d) => d,
+                    Err(e) => {
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
+                    }
+                };
 
-        return Ok(());
-    } else {
-        match append_log(unsafe { PROGNAME }, "The file requested doesn't exist") {
-            Ok(_) => (),
-            Err(e) => return Err(RecsRecivedErrors::repack(e)),
-        };
-        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-            RecsErrorType::Error,
-            "The requested file doesn't exist",
-        )));
+                match path_present(&secret_map.secret_path, errors.clone()).uf_unwrap() {
+                    Ok(_) => (),
+                    Err(e) => return uf::new(Err(e)),
+                }
+
+                match del_file(secret_map_path.clone_path(), errors.clone(), warnings).uf_unwrap() {
+                    Ok(_) => {
+                        let _ = append_log(
+                            unsafe { PROGNAME },
+                            &format!("{} has been deleted", &secret_map_path),
+                            errors.clone()
+                        );
+                    },
+                    Err(e) => return uf::new(Err(e)),
+                }
+
+                return uf::new(Ok(()))
+
+            },
+            false => {
+                match append_log(unsafe { PROGNAME }, "The file requested doesn't exist", errors.clone()).uf_unwrap() {
+                    Ok(_) => (),
+                    Err(e) => errors.append(e),
+                };
+                errors.push(ErrorArrayItem::new(SE::GeneralError, format!("The requested file doesn't exist")));
+                return uf::new(Err(errors))
+            },
+        },
+        Err(e) => return uf::new(Err(e)),
     }
+
+    // errors.push(ErrorArrayItem::from(e));
+    // return uf::new(Err(errors));
 }
 
 // * helper funtion for fetching chunks
-fn fetch_chunk_helper(num: u32) -> Result<String, RecsRecivedErrors> {
-    match fetch_chunk(num) {
-        Ok(d) => return Ok(d),
-        Err(e) => return Err(e),
+fn fetch_chunk_helper(num: u32, errors: ErrorArray) -> uf<String> {
+    match fetch_chunk(num, errors).uf_unwrap() {
+        Ok(d) => return uf::new(Ok(d)),
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
@@ -1082,70 +954,44 @@ fn verify_signature(
     encoded_buffer: &Vec<u8>,
     signature: &str,
     signature_count: usize,
-) -> Result<Vec<Option<RecsRecivedWarnings>>, RecsRecivedErrors> {
+    mut warnings: WarningArray,
+    mut errors: ErrorArray
+) -> uf<OkWarning<()>> {
     let _sig_digit_count = truncate(&signature, 1); // remember it exists
 
     let sig_version = truncate(&signature[3..], 6);
 
-    // Defining one variable that will hold the last warning if any
-    let mut warnings: Vec<Option<RecsRecivedWarnings>> = vec![];
-
-    warnings.push( match sig_version == VERSION {
-        true => None,
-        false => {
-            let _ = append_log(unsafe { PROGNAME }, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
-            Some(RecsRecivedWarnings::RecsWarning(RecsWarning::new(
-                RecsWarningType::OutdatedVersion,
-            )))
-        }
-    });
+    if sig_version != VERSION {
+        warnings.push(WarningArrayItem::new(system::errors::Warnings::OutdatedVersion));
+    }
 
     let new_hash_data: String = match String::from_utf8(encoded_buffer.to_vec()) {
         Ok(d) => d,
         Err(e) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InvalidTypeGiven,
-                &e.to_string(),
-            )))
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
         }
     };
+    
     // pulling the hash from the signature
     let sig_hash: String = truncate(&signature[10..], 20).to_owned();
     let new_hash: String = truncate(&create_hash(new_hash_data.clone()), 20).to_owned();
 
-    warnings.push(match sig_hash == new_hash {
-        true => None,
-        false => {
-            let _ = append_log(unsafe { PROGNAME }, "A chunk had an invalid has signature");
-            match append_log(
-                unsafe { PROGNAME },
-                "an option will be in a cli tool to ignore checks in an emergency",
-            ) {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::repack(e)),
-            };
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidSignature,
-            )));
-        }
-    });
+    if sig_hash != new_hash {
+        warnings.push(WarningArrayItem::new_details(system::errors::Warnings::Warning, "Signature hash doesn't align".to_string()))
+    }
 
     let sig_count = match signature[31..].parse::<usize>() {
         Ok(d) => d,
         Err(e) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InvalidTypeGiven,
-                &e.to_string(),
-            )))
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
         }
     };
 
-    warnings.push(match sig_count == signature_count {
-        true => None,
-        false => Some(RecsRecivedWarnings::RecsWarning(RecsWarning::new(
-            RecsWarningType::MisAlignedChunk,
-        ))),
-    });
+    if sig_count != signature_count {
+        warnings.push(WarningArrayItem::new(system::errors::Warnings::MisAlignedChunk));
+    }
 
     let _ = append_log(
         unsafe { PROGNAME },
@@ -1153,8 +999,13 @@ fn verify_signature(
             "Decrypting request: {} signatures verified, writing",
             &new_hash
         ),
+        errors.clone()
     );
-    return Ok(warnings);
+    
+    return uf::new(Ok(OkWarning{
+        data: (),
+        warning: warnings,
+    }));
 }
 
 fn padding_count(number: usize) -> String {

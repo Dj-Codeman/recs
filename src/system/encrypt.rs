@@ -3,17 +3,19 @@ use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::encode;
 use hmac::{Hmac, Mac};
 use logging::append_log;
-use pretty::dump;
+use pretty::warn;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
 use std::str;
 use substring::Substring;
-use system::truncate;
+use system::{
+    errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf},
+    functions::truncate,
+};
 
 use crate::{
     // array_tools::fetch_chunk,
     config::ARRAY_LEN,
-    errors::{RecsError, RecsErrorType, RecsRecivedErrors},
     PROGNAME,
 };
 
@@ -43,20 +45,29 @@ pub fn encrypt(
     data: Vec<u8>,
     key: Vec<u8>,
     buffer_size: usize,
-) -> Result<String, RecsRecivedErrors> {
+    mut errors: ErrorArray,
+) -> uf<String> {
     let iv = create_iv();
-    let key: Vec<u8> = key.try_into().map_err(|_| {
-        RecsRecivedErrors::RecsError(RecsError::new_details(
-            RecsErrorType::InvalidKey,
-            "Invalid key length",
-        ))
-    })?;
+    let key: Vec<u8> = match key.try_into() {
+        Ok(d) => d,
+        Err(_) => {
+            errors.push(ErrorArrayItem::new(
+                SE::InvalidKey,
+                format!("Invalid key length"),
+            ));
+            return uf::new(Err(errors));
+        }
+    };
 
-    let cipher = Aes256Cbc::new_from_slices(&key, iv.as_bytes()).map_err(|e| {
-        RecsRecivedErrors::RecsError(RecsError::new_details(RecsErrorType::Error, &e.to_string()))
-    })?;
+    let cipher: Cbc<Aes256, Pkcs7> = match Aes256Cbc::new_from_slices(&key, iv.as_bytes()) {
+        Ok(d) => d,
+        Err(e) => {
+            errors.push(ErrorArrayItem::new(SE::InvalidKey, e.to_string()));
+            return uf::new(Err(errors));
+        }
+    };
 
-    let pad_len = data.len();
+    let pad_len: usize = data.len();
     let mut buffer: Vec<u8> = if pad_len > buffer_size {
         vec![0; buffer_size + pad_len * 2]
     } else {
@@ -65,13 +76,11 @@ pub fn encrypt(
 
     buffer[..pad_len].copy_from_slice(&data);
 
-    let ciphertext = encode(match cipher.encrypt(&mut buffer, pad_len) {
+    let ciphertext: String = encode(match cipher.encrypt(&mut buffer, pad_len) {
         Ok(d) => d,
         Err(e) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InvalidBlockData,
-                &e.to_string(),
-            )))
+            errors.push(ErrorArrayItem::new(SE::InvalidBlockData, e.to_string()));
+            return uf::new(Err(errors));
         }
     });
 
@@ -80,30 +89,40 @@ pub fn encrypt(
     cipherdata.push_str(&ciphertext);
     cipherdata.push_str(&iv);
 
+    // Simplefies the function call for creating the hmac
+    let safe_derive_key: String = match String::from_utf8(key) {
+        Ok(d) => d,
+        Err(e) => {
+            errors.push(ErrorArrayItem::new(SE::InvalidUtf8Data, e.to_string()));
+            return uf::new(Err(errors));
+        }
+    };
+
     // creating hmac
-    let hmac = create_hmac(
-        &cipherdata,
-        &String::from_utf8(key).map_err(|e| {
-            RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::Error,
-                &e.to_string(),
-            ))
-        })?,
-    )?;
+    let hmac = match create_hmac(&cipherdata, &safe_derive_key, errors.clone()).uf_unwrap() {
+        Ok(d) => d,
+        Err(e) => return uf::new(Err(e)),
+    };
 
     cipherdata.push_str(&hmac);
 
     if cipherdata.len() == 0 {
-        let _ = append_log(unsafe { PROGNAME }, "NO CIPHER DATA RECIVED");
-        return Err(RecsRecivedErrors::RecsError(RecsError::new(
-            RecsErrorType::Error,
-        )));
+        let _ = append_log(
+            unsafe { PROGNAME },
+            "NO CIPHER DATA RECIVED",
+            errors.clone(),
+        );
+        errors.push(ErrorArrayItem::new(
+            SE::GeneralError,
+            format!("Cipher data length is 0"),
+        ));
+        return uf::new(Err(errors));
     }
 
-    Ok(cipherdata)
+    uf::new(Ok(cipherdata))
 }
 
-pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors> {
+pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8>> {
     // * Changing this to run on refrenced data to hopefully run with a smaller ram footprint
     //cipherdata legnth minus the hmac because its appened later
     let cipherdata_len: usize = cipherdata.len() - 64;
@@ -115,9 +134,9 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
     let old_hmac: String = cipherdata
         .substring(cipherdata_len, cipherdata_len + 64)
         .to_owned();
-    let new_hmac: String = match create_hmac(cipherdata_hmacless, key) {
+    let new_hmac: String = match create_hmac(cipherdata_hmacless, key, errors.clone()).uf_unwrap() {
         Ok(d) => d,
-        Err(e) => return Err(e),
+        Err(e) => return uf::new(Err(e)),
     };
 
     // verifing hmac
@@ -133,10 +152,8 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
             let decoded_ciphertext: Vec<u8> = match hex::decode(encoded_ciphertext) {
                 Ok(d) => d,
                 Err(e) => {
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                        RecsErrorType::InvalidHexData,
-                        &e.to_string(),
-                    )))
+                    errors.push(ErrorArrayItem::new(SE::InvalidHexData, e.to_string()));
+                    return uf::new(Err(errors));
                 }
             };
             // turn the data to a VEC byte array and decrypt it
@@ -146,31 +163,26 @@ pub fn decrypt(cipherdata: &str, key: &str) -> Result<Vec<u8>, RecsRecivedErrors
                 Ok(d) => match d.decrypt(&mut buf) {
                     Ok(d) => d,
                     Err(e) => {
-                        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                            RecsErrorType::InvalidBlockData,
-                            &e.to_string(),
-                        )))
+                        errors.push(ErrorArrayItem::new(SE::InvalidBlockData, e.to_string()));
+                        return uf::new(Err(errors));
                     }
                 },
                 Err(e) => {
-                    return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                        RecsErrorType::InvalidIvData,
-                        &e.to_string(),
-                    )))
+                    errors.push(ErrorArrayItem::new(SE::InvalidKey, e.to_string()));
+                    return uf::new(Err(errors));
                 }
             };
             // turn it back into text
-            return Ok(decrypted_bytes.to_vec());
+            return uf::new(Ok(decrypted_bytes.to_vec()));
         }
         false => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidHMACData,
-            )))
+            errors.push(ErrorArrayItem::new(SE::InvalidHMACData, "".to_string()));
+            return uf::new(Err(errors));
         }
     }
 }
 
-fn create_hmac(cipherdata: &str, derive_key: &str) -> Result<String, RecsRecivedErrors> {
+fn create_hmac(cipherdata: &str, derive_key: &str, mut errors: ErrorArray) -> uf<String> {
     // create hmac
     type HmacSha256 = Hmac<Sha256>;
 
@@ -185,22 +197,19 @@ fn create_hmac(cipherdata: &str, derive_key: &str) -> Result<String, RecsRecived
     let mut mac = match HmacSha256::new_from_slice(chunk_data.as_bytes()) {
         Ok(d) => d,
         Err(e) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                RecsErrorType::InvalidHMACSize,
-                &e.to_string(),
-            )))
+            errors.push(ErrorArrayItem::new(SE::InvalidHMACSize, e.to_string()));
+            return uf::new(Err(errors));
         }
     };
 
     mac.update(cipherdata.as_bytes());
     let hmac = truncate(&hex::encode(mac.finalize().into_bytes()), 64).to_owned();
     match hmac.len() == 64 {
-        true => return Ok(hmac),
+        true => return uf::new(Ok(hmac)),
         false => {
-            dump(&hmac);
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidHMACSize,
-            )));
+            warn(&format!("Invalid hmac size: {}", hmac));
+            errors.push(ErrorArrayItem::new(SE::InvalidHMACSize, "".to_string()));
+            return uf::new(Err(errors));
         }
     };
 }
