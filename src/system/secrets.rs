@@ -9,7 +9,7 @@ use std::{
     io::{prelude::*, SeekFrom},
 };
 use system::{
-    errors::{ErrorArray, ErrorArrayItem, Errors as SE, OkWarning, UnifiedResult as uf, WarningArray, WarningArrayItem},
+    errors::{ ErrorArray, ErrorArrayItem, Errors as SE, OkWarning, UnifiedResult as uf, WarningArray, WarningArrayItem},
     functions::{create_hash, del_dir, del_file, open_file, path_present, truncate},
     types::{ClonePath, PathType},
 };
