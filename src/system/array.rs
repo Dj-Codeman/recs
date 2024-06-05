@@ -177,9 +177,9 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
 
                 match path_present(&chunk_map_path, errors.clone()).uf_unwrap() {
                     Ok(_) => (),
-                    Err(e) => match del_file(chunk_map_path, e, warnings).uf_unwrap() {
+                    Err(e) => match del_file(chunk_map_path.clone_path(), e, warnings.clone()).uf_unwrap() {
                         Ok(_) => todo!(),
-                        Err(e) => return uf::new(Err(e)),
+                        Err(e) => errors.append(e),
                     },
                 }
 
