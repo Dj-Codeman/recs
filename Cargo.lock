@@ -690,7 +690,7 @@ checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 [[package]]
 name = "logging"
 version = "1.0.0"
-source = "git+https://github.com/Dj-Codeman/logger.git#b9a5ef2b9481405da2130a501c3084145c3659ae"
+source = "git+https://github.com/Dj-Codeman/logger.git#b41f3035ea74a04138bee83765b156a42f0f9b2f"
 dependencies = [
  "chrono",
  "system",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "recs"
-version = "4.0.1"
+version = "4.0.2"
 dependencies = [
  "aes",
  "base64 0.21.7",

@@ -62,7 +62,7 @@ pub fn set_system(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf
 
     match generate_system_array(errors.clone()).uf_unwrap() {
         Ok(_) => {
-            let _ = match index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
+            match index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(_) => append_log(
                     unsafe { PROGNAME },
                     "System array has been created and indexed",
@@ -97,13 +97,12 @@ fn make_folders(debug: bool, mut errors: ErrorArray) -> uf<()> {
 
                 for path in paths.iter() {
                     match make_dir(&path.clone_path(), errors.clone()).uf_unwrap() {
-                        Ok(_) => match debug { // * This might be a bug 
-                            true => append_log(
+                        Ok(_) => if debug {
+                            append_log(
                                 unsafe { PROGNAME },
                                 &format!("Path : {} created", &path),
                                 errors.clone()
-                            ),
-                            false => return uf::new(Ok(())),
+                            );
                         },
                         Err(e) => return uf::new(Err(e)),
                     };
