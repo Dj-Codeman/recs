@@ -47,7 +47,7 @@ pub fn generate_system_array(errors: ErrorArray) -> uf<bool> {
         Err(e) => return uf::new(Err(e)),
     };
 
-    // Remove the existing system array directory
+    // // Remove the existing system array directory
     let _ = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone());
 
     // Create the system array contents
@@ -124,8 +124,8 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
     let mut chunk: String = String::new();
 
     let mut file = match OpenOptions::new()
-        .create_new(true)
-        .write(true)
+        .create_new(false)
+        .write(false)
         .append(false)
         .open(system_paths.SYSTEM_ARRAY_LOCATION.clone())
     {
