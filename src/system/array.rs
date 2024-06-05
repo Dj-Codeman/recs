@@ -1,13 +1,13 @@
 use logging::append_log;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{File, OpenOptions},
+    fs::OpenOptions,
     io::{prelude::*, SeekFrom},
     str,
 };
 use system::{
     errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray},
-    functions::{create_hash, del_dir, del_file, open_file, path_present},
+    functions::{create_hash, del_dir, del_file, path_present},
     types::{ClonePath, PathType},
 };
 
@@ -123,14 +123,17 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
     #[allow(unused_assignments)] // * cheap fix
     let mut chunk: String = String::new();
 
-    let mut file = match open_file(
-        system_paths.SYSTEM_ARRAY_LOCATION.clone_path(),
-        errors.clone(),
-    )
-    .uf_unwrap()
+    let mut file = match OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .append(false)
+        .open(system_paths.SYSTEM_ARRAY_LOCATION.clone())
     {
         Ok(d) => d,
-        Err(e) => return uf::new(Err(e)),
+        Err(e) => {
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
+        }
     };
 
     if (range_end - range_start) < CHUNK_SIZE as u32 {
@@ -188,11 +191,18 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
                     }
                 };
 
-                let mut chunk_map_file =
-                    match open_file(chunk_map_path.clone_path(), errors.clone()).uf_unwrap() {
-                        Ok(d) => d,
-                        Err(e) => return uf::new(Err(e)),
-                    };
+                let mut chunk_map_file = match OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .append(false)
+                    .open(chunk_map_path.clone())
+                {
+                    Ok(d) => d,
+                    Err(e) => {
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
+                    }
+                };
 
                 match write!(chunk_map_file, "{}", pretty_chunk_map) {
                     Ok(_) => match append_log(

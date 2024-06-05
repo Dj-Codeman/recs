@@ -1,7 +1,11 @@
 use logging::append_log;
 use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
-use system::{errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray}, functions::{make_dir, path_present}, types::{ClonePath, PathType}};
+use system::{
+    errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray},
+    functions::{make_dir, path_present},
+    types::{ClonePath, PathType},
+};
 
 use crate::{
     array::{generate_system_array, index_system_array},
@@ -66,7 +70,7 @@ pub fn set_system(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf
                 Ok(_) => append_log(
                     unsafe { PROGNAME },
                     "System array has been created and indexed",
-                    errors.clone()
+                    errors.clone(),
                 ),
 
                 Err(e) => return uf::new(Err(e)),
@@ -97,25 +101,30 @@ fn make_folders(debug: bool, mut errors: ErrorArray) -> uf<()> {
 
                 for path in paths.iter() {
                     match make_dir(&path.clone_path(), errors.clone()).uf_unwrap() {
-                        Ok(_) => if debug {
-                            append_log(
-                                unsafe { PROGNAME },
-                                &format!("Path : {} created", &path),
-                                errors.clone()
-                            );
-                        },
+                        Ok(_) => {
+                            if debug {
+                                append_log(
+                                    unsafe { PROGNAME },
+                                    &format!("Path : {} created", &path),
+                                    errors.clone(),
+                                );
+                            }
+                        }
                         Err(e) => return uf::new(Err(e)),
                     };
                 }
             }
             false => {
-                errors.push(ErrorArrayItem::new(SE::CreatingFile, "System path missing".to_string()));
-                return uf::new(Err(errors))
+                errors.push(ErrorArrayItem::new(
+                    SE::CreatingFile,
+                    "System path missing".to_string(),
+                ));
+                return uf::new(Err(errors));
             }
         },
         Err(e) => return uf::new(Err(e)),
     }
-    return uf::new(Ok(()))
+    return uf::new(Ok(()));
 }
 
 // ! environment as in system

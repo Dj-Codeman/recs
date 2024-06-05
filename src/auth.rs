@@ -4,9 +4,15 @@ use pretty::notice;
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{read_to_string, OpenOptions}, io::Write, str
+    fs::{read_to_string, OpenOptions},
+    io::Write,
+    str,
 };
-use system::{errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray}, functions::{create_hash, del_file, path_present}, types::{ClonePath, PathType}};
+use system::{
+    errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray},
+    functions::{create_hash, del_file, path_present},
+    types::{ClonePath, PathType},
+};
 
 use crate::{
     array::array_arimitics,
@@ -42,7 +48,8 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
-    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone()).uf_unwrap() {
+    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone()).uf_unwrap()
+    {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
@@ -56,7 +63,10 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
     let iteration = match std::num::NonZeroU32::new(num) {
         Some(d) => d,
         None => {
-            errors.push(ErrorArrayItem::new(SE::GeneralError, format!("Invalid nonzero type")));
+            errors.push(ErrorArrayItem::new(
+                SE::GeneralError,
+                format!("Invalid nonzero type"),
+            ));
             return uf::new(Err(errors));
         }
     };
@@ -74,10 +84,11 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
     // * creating the integrity file
 
     let secret: String = "The hotdog man isn't real !?".to_string();
-    let cipher_integrity: String = match encrypt(secret.into(), userkey.into(), 1024, errors.clone()).uf_unwrap() {
-        Ok(d) => d,
-        Err(e) => return uf::new(Err(e)),
-    };
+    let cipher_integrity: String =
+        match encrypt(secret.into(), userkey.into(), 1024, errors.clone()).uf_unwrap() {
+            Ok(d) => d,
+            Err(e) => return uf::new(Err(e)),
+        };
 
     let system_paths: SystemPaths = SystemPaths::new();
 
@@ -85,31 +96,49 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
         Ok(d) => match d {
             true => match debug {
                 true => {
-                    match del_file(system_paths.USER_KEY_LOCATION.clone_path(), errors.clone(), warnings.clone()).uf_unwrap() {
+                    match del_file(
+                        system_paths.USER_KEY_LOCATION.clone_path(),
+                        errors.clone(),
+                        warnings.clone(),
+                    )
+                    .uf_unwrap()
+                    {
                         Ok(_) => {
                             notice(&format!(
                                 "{}: deleted",
                                 system_paths.USER_KEY_LOCATION.to_string()
                             ));
-                            let _ =
-                                append_log(unsafe { PROGNAME }, "The old userkey has been deleted", errors.clone());
+                            let _ = append_log(
+                                unsafe { PROGNAME },
+                                "The old userkey has been deleted",
+                                errors.clone(),
+                            );
                         }
                         Err(e) => return uf::new(Err(e)),
                     };
                 }
                 false => {
-                    match del_file(system_paths.USER_KEY_LOCATION.clone_path(), errors.clone(), warnings.clone()).uf_unwrap() {
+                    match del_file(
+                        system_paths.USER_KEY_LOCATION.clone_path(),
+                        errors.clone(),
+                        warnings.clone(),
+                    )
+                    .uf_unwrap()
+                    {
                         Ok(_) => (),
                         Err(e) => return uf::new(Err(e)),
                     };
                 }
             },
             false => {
-                errors.push(ErrorArrayItem::new(SE::CreatingFile, format!("file {} not created", &system_paths.USER_KEY_LOCATION)));
+                errors.push(ErrorArrayItem::new(
+                    SE::CreatingFile,
+                    format!("file {} not created", &system_paths.USER_KEY_LOCATION),
+                ));
                 return uf::new(Err(errors));
             }
         },
-        Err(e) => return uf::new(Err(e))
+        Err(e) => return uf::new(Err(e)),
     }
 
     // creating the master.json file
@@ -134,7 +163,7 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
                     "THIS IS A SECRET. The userkey check has been generated: {}",
                     &cipher_integrity
                 ),
-                errors.clone()
+                errors.clone(),
             ),
             false => uf::new(Ok(())),
         },
@@ -142,7 +171,7 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
             let _ = append_log(
                 unsafe { PROGNAME },
                 "An error occoured while writing data to the master json file",
-                errors.clone()
+                errors.clone(),
             );
             errors.push(ErrorArrayItem::from(e));
             return uf::new(Err(errors));
@@ -168,9 +197,19 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
         PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
 
     // Deleting and recreating the json file
-    let _ = match del_file(userkey_map_path.clone_path(), errors.clone(), warnings.clone()).uf_unwrap() {
+    let _ = match del_file(
+        userkey_map_path.clone_path(),
+        errors.clone(),
+        warnings.clone(),
+    )
+    .uf_unwrap()
+    {
         Ok(_) => match debug {
-            true => append_log(unsafe { PROGNAME }, "Deleting old usrkey if it exists", errors.clone()),
+            true => append_log(
+                unsafe { PROGNAME },
+                "Deleting old usrkey if it exists",
+                errors.clone(),
+            ),
             false => uf::new(Ok(())),
         },
         Err(e) => return uf::new(Err(e)),
@@ -191,7 +230,7 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
                     "Failed to open the new userkey.json path {}, {}",
                     &userkey_map_path, e
                 ),
-                errors.clone()
+                errors.clone(),
             );
             errors.push(ErrorArrayItem::from(e));
             return uf::new(Err(errors));
@@ -200,14 +239,18 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
 
     match writeln!(userkey_map_file, "{}", pretty_userkey_map) {
         Ok(_) => {
-            let _ = append_log(unsafe { PROGNAME }, "User authentication created", errors.clone());
+            let _ = append_log(
+                unsafe { PROGNAME },
+                "User authentication created",
+                errors.clone(),
+            );
             return uf::new(Ok(()));
         }
         Err(e) => {
             let _ = append_log(
                 unsafe { PROGNAME },
                 &format!("Could save map data to file: {}", e),
-                errors.clone()
+                errors.clone(),
             );
             errors.push(ErrorArrayItem::from(e));
             return uf::new(Err(errors));
@@ -220,14 +263,15 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
     let _ = append_log(
         unsafe { PROGNAME },
         "user key authentication request started",
-        errors.clone()
+        errors.clone(),
     );
 
     let salt: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
-    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone()).uf_unwrap() {
+    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone()).uf_unwrap()
+    {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
@@ -241,7 +285,10 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
     let iteration = match std::num::NonZeroU32::new(num) {
         Some(d) => d,
         None => {
-            errors.push(ErrorArrayItem::new(SE::InvalidType, "parsing int".to_string()));
+            errors.push(ErrorArrayItem::new(
+                SE::InvalidType,
+                "parsing int".to_string(),
+            ));
             return uf::new(Err(errors));
         }
     };
@@ -266,7 +313,12 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
         }
     };
 
-    let verification_result: String = match decrypt(&verification_ciphertext.to_string(), &userkey, errors.clone()).uf_unwrap()
+    let verification_result: String = match decrypt(
+        &verification_ciphertext.to_string(),
+        &userkey,
+        errors.clone(),
+    )
+    .uf_unwrap()
     {
         Ok(d) => String::from_utf8_lossy(&d).to_string(),
         Err(e) => return uf::new(Err(e)),
@@ -275,11 +327,20 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
     match verification_result == secret {
         true => return uf::new(Ok(userkey)),
         false => {
-            match append_log(unsafe { PROGNAME }, "Authentication request failed", errors.clone()).uf_unwrap() {
+            match append_log(
+                unsafe { PROGNAME },
+                "Authentication request failed",
+                errors.clone(),
+            )
+            .uf_unwrap()
+            {
                 Ok(_) => (),
                 Err(e) => return uf::new(Err(e)),
-            };            
-            errors.push(ErrorArrayItem::new(SE::InvalidAuthRequest, format!("Given: {} Expected: {}", &verification_result, &secret)));
+            };
+            errors.push(ErrorArrayItem::new(
+                SE::InvalidAuthRequest,
+                format!("Given: {} Expected: {}", &verification_result, &secret),
+            ));
             return uf::new(Err(errors));
         }
     };
@@ -318,7 +379,10 @@ pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray) 
     let iteration = match std::num::NonZeroU32::new(num) {
         Some(d) => d,
         None => {
-            errors.push(ErrorArrayItem::new(SE::InvalidType, "parsing int".to_string()));
+            errors.push(ErrorArrayItem::new(
+                SE::InvalidType,
+                "parsing int".to_string(),
+            ));
             return uf::new(Err(errors));
         }
     };
@@ -341,8 +405,8 @@ fn fetch_chunk_helper(num: u32, errors: ErrorArray) -> uf<String> {
         Ok(d) => d,
         Err(e) => {
             return uf::new(Err(e));
-        },
+        }
     };
 
-    return uf::new(Ok(chunk_data))
+    return uf::new(Ok(chunk_data));
 }

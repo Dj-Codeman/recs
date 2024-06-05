@@ -2,6 +2,7 @@ use logging::append_log;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom};
 use system::errors::ErrorArray;
 use system::errors::ErrorArrayItem;
@@ -11,7 +12,6 @@ use system::errors::UnifiedResult as uf;
 use system::errors::WarningArray;
 use system::errors::WarningArrayItem;
 use system::functions::create_hash;
-use system::functions::open_file;
 use system::types::PathType;
 
 use crate::array::{array_arimitics, ChunkMap};
@@ -138,9 +138,17 @@ fn read_chunk_data(pretty_map_data: &ChunkMap, mut errors: ErrorArray) -> uf<Str
     let mut buffer: Vec<u8> = vec![0; CHUNK_SIZE as usize];
 
     let mut _chunk = String::new(); // TODO make an array or something for this val
-    let mut file = match open_file(system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
+    let mut file = match OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .append(false)
+        .open(system_paths.SYSTEM_ARRAY_LOCATION)
+    {
         Ok(d) => d,
-        Err(e) => return uf::new(Err(e)),
+        Err(e) => {
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
+        }
     };
 
     if (chunk_end - chunk_start) < CHUNK_SIZE as u32 {

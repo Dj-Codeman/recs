@@ -17,7 +17,11 @@ mod secret;
 use local_env::VERSION;
 use logging::append_log;
 use secret::{read_raw, write_raw};
-use system::{errors::{ErrorArray, UnifiedResult as uf, WarningArray}, functions::{create_hash, del_file, open_file, path_present}, types::{ClonePath, PathType}};
+use system::{
+    errors::{ErrorArray, ErrorArrayItem, UnifiedResult as uf, WarningArray},
+    functions::{create_hash, del_file, path_present},
+    types::{ClonePath, PathType},
+};
 
 use std::{
     fs::OpenOptions,
@@ -76,7 +80,9 @@ pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
         Err(e) => return uf::new(Err(e)),
     };
 
-    match ensure_system_path(unsafe { PROGNAME }, debug, errors.clone(), warnings.clone()).uf_unwrap() {
+    match ensure_system_path(unsafe { PROGNAME }, debug, errors.clone(), warnings.clone())
+        .uf_unwrap()
+    {
         Ok(_) => (),
         Err(e) => return uf::new(Err(e)),
     };
@@ -86,16 +92,23 @@ pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
         Err(e) => return uf::new(Err(e)),
     };
 
-    return uf::new(Ok(()))
+    return uf::new(Ok(()));
 }
 
-fn ensure_system_path(prog: &str, debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+fn ensure_system_path(
+    prog: &str,
+    debug: bool,
+    errors: ErrorArray,
+    warnings: WarningArray,
+) -> uf<()> {
     let system_paths: SystemPaths = SystemPaths::new();
     match path_present(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
         Ok(d) => match d {
             true => return uf::new(Ok(())),
             false => {
-                match append_log(prog, "System array file does not exist", errors.clone()).uf_unwrap() {
+                match append_log(prog, "System array file does not exist", errors.clone())
+                    .uf_unwrap()
+                {
                     Ok(_) => (),
                     Err(e) => return uf::new(Err(e)),
                 };
@@ -105,7 +118,7 @@ fn ensure_system_path(prog: &str, debug: bool, errors: ErrorArray, warnings: War
                     Err(e) => return uf::new(Err(e)),
                 };
                 return uf::new(Ok(()));
-            },
+            }
         },
         Err(e) => return uf::new(Err(e)),
     }
@@ -138,13 +151,13 @@ pub fn retrieve(
     name: String,
     uid: u32,
     errors: ErrorArray,
-    warnings: WarningArray
+    warnings: WarningArray,
 ) -> uf<(PathType, PathType)> {
     match read(owner, name, uid, false, errors, warnings).uf_unwrap() {
         Ok(d) => {
             d.warning.display();
             return uf::new(Ok(d.data));
-        },
+        }
         Err(e) => return uf::new(Err(e)),
     }
 }
@@ -167,7 +180,11 @@ pub fn ping(owner: String, name: String, errors: ErrorArray) -> uf<bool> {
     path_present(&secret_map_path, errors)
 }
 
-pub fn encrypt_raw(data: String, errors: ErrorArray, warnings: WarningArray) -> uf<(String, String, usize)> {
+pub fn encrypt_raw(
+    data: String,
+    errors: ErrorArray,
+    warnings: WarningArray,
+) -> uf<(String, String, usize)> {
     match write_raw(data.into(), errors, warnings).uf_unwrap() {
         Ok((key, data, chunks)) => return uf::new(Ok((key, data, chunks))),
         Err(e) => return uf::new(Err(e)),
@@ -179,18 +196,18 @@ pub fn decrypt_raw(
     recs_key: String,
     recs_chunks: usize,
     errors: ErrorArray,
-    warnings: WarningArray
+    warnings: WarningArray,
 ) -> uf<Vec<u8>> {
     match read_raw(recs_data, recs_key, recs_chunks, errors, warnings).uf_unwrap() {
         Ok(d) => {
             d.warning.display();
-            return uf::new(Ok(d.data))
-        },
+            return uf::new(Ok(d.data));
+        }
         Err(e) => return uf::new(Err(e)),
     }
 }
 
-pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<bool> {
+pub fn update_map(map_num: u32, mut errors: ErrorArray, warnings: WarningArray) -> uf<bool> {
     let system_paths: SystemPaths = SystemPaths::new();
     // Add a result to return errors from this
     // ? Getting the current map data
@@ -198,9 +215,17 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> u
         PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
 
     // ? Reading the map
-    let mut map_file = match open_file(map_path.clone_path(), errors.clone()).uf_unwrap() {
+    let mut map_file = match OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .append(false)
+        .open(map_path.clone())
+    {
         Ok(d) => d,
-        Err(e) => return uf::new(Err(e)),
+        Err(e) => {
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
+        }
     };
     let mut map_data: String = String::new();
 
@@ -212,7 +237,8 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> u
     let pretty_map_data: ChunkMap = serde_json::from_str(&map_data).unwrap();
 
     // ? calculating new hash
-    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num, errors.clone()).uf_unwrap() {
+    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num, errors.clone()).uf_unwrap()
+    {
         Ok(data) => (true, Some(data)),
         Err(_) => (false, None),
     };
@@ -228,7 +254,7 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> u
         let _ = append_log(
             unsafe { PROGNAME },
             &format!("Failed to fetch chunk data for number {}", &map_num),
-            errors.clone()
+            errors.clone(),
         );
     }
 
@@ -255,7 +281,11 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> u
 
     if let Err(_e) = writeln!(map_file, "{}", updated_map) {
         eprintln!("An error occoured");
-        let _ = append_log(unsafe { PROGNAME }, "Could save map data to file", errors.clone());
+        let _ = append_log(
+            unsafe { PROGNAME },
+            "Could save map data to file",
+            errors.clone(),
+        );
     };
 
     return uf::new(Ok(true));
@@ -265,7 +295,7 @@ pub fn check_map(map_num: u32, errors: ErrorArray) -> uf<bool> {
     // needs to fail gracefuly
     match fetch_chunk(map_num, errors).uf_unwrap() {
         Ok(_) => return uf::new(Ok(true)),
-        Err(_) =>return uf::new(Ok(false)),
+        Err(_) => return uf::new(Ok(false)),
     }
 }
 
