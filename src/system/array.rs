@@ -1,7 +1,7 @@
 use logging::append_log;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::OpenOptions,
+    fs::{File, OpenOptions},
     io::{prelude::*, SeekFrom},
     str,
 };
@@ -123,12 +123,7 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
     #[allow(unused_assignments)] // * cheap fix
     let mut chunk: String = String::new();
 
-    let mut file = match OpenOptions::new()
-        .create_new(false)
-        .write(false)
-        .append(false)
-        .open(system_paths.SYSTEM_ARRAY_LOCATION.clone())
-    {
+    let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION.to_string()) {
         Ok(d) => d,
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
@@ -178,7 +173,7 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
                 match path_present(&chunk_map_path, errors.clone()).uf_unwrap() {
                     Ok(_) => (),
                     Err(e) => match del_file(chunk_map_path.clone_path(), e, warnings.clone()).uf_unwrap() {
-                        Ok(_) => todo!(),
+                        Ok(_) => (),
                         Err(e) => errors.append(e),
                     },
                 }
@@ -191,7 +186,6 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
                     }
                 };
 
-                println!("{}", pretty_chunk_map); // TODO REMOVE
 
                 let mut chunk_map_file = match OpenOptions::new()
                     .create_new(true)
