@@ -191,6 +191,8 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
                     }
                 };
 
+                println!("{}", pretty_chunk_map); // TODO REMOVE
+
                 let mut chunk_map_file = match OpenOptions::new()
                     .create_new(true)
                     .write(true)
