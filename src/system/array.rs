@@ -6,8 +6,11 @@ use std::{
     str,
 };
 use system::{
-    errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray},
-    functions::{create_hash, del_dir, del_file, path_present},
+    errors::{
+        ErrorArray, ErrorArrayItem, Errors as SE, OkWarning, UnifiedResult as uf, WarningArray,
+        WarningArrayItem, Warnings as SW,
+    },
+    functions::{create_hash, del_dir, del_file},
     types::{ClonePath, PathType},
 };
 
@@ -40,15 +43,34 @@ pub fn array_arimitics() -> u32 {
     return total_chunks;
 }
 
-pub fn generate_system_array(errors: ErrorArray) -> uf<bool> {
+pub fn generate_system_array(
+    errors: ErrorArray,
+    mut warnings: WarningArray,
+    debug: bool,
+) -> uf<OkWarning<()>> {
     let system_paths: SystemPaths = SystemPaths::new();
-    match append_log(unsafe { PROGNAME }, "Creating system array", errors.clone()).uf_unwrap() {
-        Ok(_) => (),
-        Err(e) => return uf::new(Err(e)),
-    };
 
-    // // Remove the existing system array directory
-    let _ = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone());
+    if let Err(_) =
+        append_log(unsafe { PROGNAME }, "Creating system array", errors.clone()).uf_unwrap()
+    {
+        let w = WarningArrayItem::new_details(SW::Warning, String::from("Logging issue occoured"));
+        warnings.push(w);
+    }
+
+    // Remove the existing system array directory
+    match del_dir(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
+        Ok(d) => match d {
+            true => (),
+            false => unreachable!(),
+        },
+        Err(_) => {
+            let w = WarningArrayItem::new_details(
+                SW::Warning,
+                String::from("The system array file might not be created correctly"),
+            );
+            warnings.push(w);
+        }
+    }
 
     // Create the system array contents
     let system_array_contents = create_system_array_contents();
@@ -56,20 +78,29 @@ pub fn generate_system_array(errors: ErrorArray) -> uf<bool> {
     // Write the system array contents to the file
     match write_system_array_to_file(&system_array_contents, errors.clone()).uf_unwrap() {
         Ok(_) => {
-            match append_log(unsafe { PROGNAME }, "Created system array", errors.clone())
-                .uf_unwrap()
+            if let Err(_) =
+                append_log(unsafe { PROGNAME }, "Created system array", errors.clone()).uf_unwrap()
             {
-                Ok(_) => (),
-                Err(e) => return uf::new(Err(e)),
-            };
-            return uf::new(Ok(true));
+                let w = WarningArrayItem::new_details(
+                    SW::Warning,
+                    String::from("Logging issue occoured"),
+                );
+                warnings.push(w);
+            }
+
+            return uf::new(Ok(OkWarning {
+                data: (),
+                warning: warnings,
+            }));
         }
         Err(e) => {
-            let _ = append_log(
-                unsafe { PROGNAME },
-                &format!("Could not write the system_array to the path specified: "),
-                errors.clone(),
-            );
+            if debug {
+                let _ = append_log(
+                    unsafe { PROGNAME },
+                    &format!("Could not write the system_array to the path specified: "),
+                    errors.clone(),
+                );
+            }
             return uf::new(Err(e));
         }
     }
@@ -93,8 +124,7 @@ fn write_system_array_to_file(contents: &str, mut errors: ErrorArray) -> uf<()> 
 
     let mut system_array_file = match OpenOptions::new()
         .create_new(true)
-        .write(true)
-        .append(false)
+        .append(true)
         .open(system_paths.SYSTEM_ARRAY_LOCATION)
     {
         Ok(d) => d,
@@ -115,7 +145,11 @@ fn write_system_array_to_file(contents: &str, mut errors: ErrorArray) -> uf<()> 
 
 // indexing the created array
 
-pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<bool> {
+pub fn index_system_array(
+    mut errors: ErrorArray,
+    mut warnings: WarningArray,
+    debug: bool,
+) -> uf<OkWarning<()>> {
     let mut chunk_number: u32 = 1;
     let mut range_start: u32 = BEG_CHAR;
     let mut range_end: u32 = BEG_CHAR + CHUNK_SIZE as u32;
@@ -127,6 +161,10 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
         Ok(d) => d,
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(
+                SE::InvalidFile,
+                String::from("Could not open the system_array_location file"),
+            ));
             return uf::new(Err(errors));
         }
     };
@@ -148,6 +186,10 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
             Ok(d) => d,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(
+                    SE::GeneralError,
+                    String::from("Failed to move seek head"),
+                ));
                 return uf::new(Err(errors));
             }
         };
@@ -170,12 +212,19 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
                 let chunk_map_path: PathType =
                     PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
 
-                match path_present(&chunk_map_path, errors.clone()).uf_unwrap() {
-                    Ok(_) => (),
-                    Err(e) => match del_file(chunk_map_path.clone_path(), e, warnings.clone()).uf_unwrap() {
-                        Ok(_) => (),
-                        Err(e) => errors.append(e),
-                    },
+                // attempt to delete the old key map
+                if let Err(err) = del_file(
+                    chunk_map_path.clone_path(),
+                    errors.clone(),
+                    warnings.clone(),
+                )
+                .uf_unwrap()
+                {
+                    warnings.push(WarningArrayItem::new_details(
+                        SW::Warning,
+                        String::from("Couldn't delete a map file"),
+                    ));
+                    errors.append(err);
                 }
 
                 let pretty_chunk_map = match serde_json::to_string_pretty(&chunk_map) {
@@ -186,7 +235,6 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
                     }
                 };
 
-
                 let mut chunk_map_file = match OpenOptions::new()
                     .create_new(true)
                     .write(true)
@@ -196,47 +244,55 @@ pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<
                     Ok(d) => d,
                     Err(e) => {
                         errors.push(ErrorArrayItem::from(e));
+                        errors.push(ErrorArrayItem::new(
+                            SE::OpeningFile,
+                            String::from("Couldn't open a chunk map file"),
+                        ));
                         return uf::new(Err(errors));
                     }
                 };
 
                 match write!(chunk_map_file, "{}", pretty_chunk_map) {
-                    Ok(_) => match append_log(
-                        unsafe { PROGNAME },
-                        &format!("The map file {} has been created", &chunk_map_path),
-                        errors.clone(),
-                    )
-                    .uf_unwrap()
-                    {
-                        Ok(_) => (),
-                        Err(e) => return uf::new(Err(e)),
-                    },
+                    Ok(_) => {
+                        if let Err(_) = append_log(
+                            unsafe { PROGNAME },
+                            &format!("The map file {} has been created", &chunk_map_path),
+                            errors.clone(),
+                        ).uf_unwrap() {
+                            warnings.push(WarningArrayItem::new_details(SW::Warning, String::from("Could not log data")))
+                        }
+
+                        if debug {
+                            warnings.push(WarningArrayItem::new_details(SW::Warning, format!("The map file {} has been created", &chunk_map_path)))
+                        }
+                    }
                     Err(e) => {
                         errors.push(ErrorArrayItem::from(e));
+                        errors.push(ErrorArrayItem::new(SE::OpeningFile, String::from("Could not write to chunk map file")));
                         return uf::new(Err(errors));
                     }
-                };
+                }
             }
             Err(_) => break,
         }
 
         chunk_number += 1;
-        // chunk = "".to_string();
         range_start = range_end;
         range_end += CHUNK_SIZE as u32;
     }
 
-    match append_log(
+    if let Err(_) = append_log(
         unsafe { PROGNAME },
-        "Indexed system array !",
+        &format!("System array has been indexed"),
         errors.clone(),
-    )
-    .uf_unwrap()
-    {
-        Ok(_) => (),
-        Err(e) => return uf::new(Err(e)),
-    };
-    uf::new(Ok(true))
+    ).uf_unwrap() {
+        warnings.push(WarningArrayItem::new_details(SW::Warning, String::from("Could not log data")))
+    }
+    
+    uf::new(Ok(OkWarning {
+        data: (),
+        warning: warnings,
+    }))
 }
 
 #[cfg(test)]

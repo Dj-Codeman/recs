@@ -18,7 +18,9 @@ use local_env::VERSION;
 use logging::append_log;
 use secret::{read_raw, write_raw};
 use system::{
-    errors::{ErrorArray, ErrorArrayItem, UnifiedResult as uf, WarningArray},
+    errors::{
+        ErrorArray, ErrorArrayItem, OkWarning, Warnings as SW, UnifiedResult as uf, WarningArray, WarningArrayItem,
+    },
     functions::{create_hash, del_file, path_present},
     types::{ClonePath, PathType},
 };
@@ -57,10 +59,17 @@ pub fn set_prog(data: &'static str) {
 }
 
 /// Initialize checks the progname, and debugging values snf ensure the lib is ready to function
-pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+pub fn initialize(errors: ErrorArray, mut warnings: WarningArray) -> uf<OkWarning<()>> {
     let debugging: bool = match unsafe { DEBUGGING } {
         Some(d) => match d {
-            true => true,
+            true => {
+                let w = WarningArrayItem::new_details(
+                    system::errors::Warnings::Warning,
+                    String::from("Verbosity enabled"),
+                );
+                warnings.push(w);
+                true
+            }
             false => false,
         },
         None => false,
@@ -75,15 +84,15 @@ pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
         false => false,
     };
 
-    match append_log(unsafe { PROGNAME }, "RECS STARTED", errors.clone()).uf_unwrap() {
-        Ok(_) => (),
-        Err(e) => return uf::new(Err(e)),
-    };
+    if let Err(_) = append_log(unsafe { PROGNAME }, "RECS STARTED", errors.clone()).uf_unwrap() {
+        let w = WarningArrayItem::new_details(SW::Warning, String::from("Logging issue occoured"));
+        warnings.push(w);
+    }
 
     match ensure_system_path(unsafe { PROGNAME }, debug, errors.clone(), warnings.clone())
         .uf_unwrap()
     {
-        Ok(_) => (),
+        Ok(d) => warnings.append(d.warning),
         Err(e) => return uf::new(Err(e)),
     };
 
@@ -92,32 +101,50 @@ pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
         Err(e) => return uf::new(Err(e)),
     };
 
-    return uf::new(Ok(()));
+    return uf::new(Ok(OkWarning{
+        data: (),
+        warning: warnings,
+    }));
 }
 
 fn ensure_system_path(
     prog: &str,
     debug: bool,
     errors: ErrorArray,
-    warnings: WarningArray,
-) -> uf<()> {
+    mut warnings: WarningArray,
+) -> uf<OkWarning<()>> {
     let system_paths: SystemPaths = SystemPaths::new();
+
+    if debug {
+        let w = WarningArrayItem::new_details(
+            system::errors::Warnings::Warning,
+            format!("Current system paths are {:#?}", system_paths.clone()),
+        );
+        warnings.push(w);
+    }
+
     match path_present(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
         Ok(d) => match d {
-            true => return uf::new(Ok(())),
+            true => {
+                return uf::new(Ok(OkWarning {
+                    data: (),
+                    warning: warnings,
+                }))
+            }
             false => {
-                match append_log(prog, "System array file does not exist", errors.clone())
-                    .uf_unwrap()
-                {
-                    Ok(_) => (),
-                    Err(e) => return uf::new(Err(e)),
-                };
+                if let Err(_) = append_log(prog, "System array file does not exist", errors.clone()).uf_unwrap() {
+                    let w = WarningArrayItem::new_details(SW::Warning, String::from("Logging issue occurred"));
+                    warnings.push(w);
+                }
 
                 match set_system(debug, errors.clone(), warnings.clone()).uf_unwrap() {
-                    Ok(_) => (),
+                    Ok(d) => warnings.append(d.warning),
                     Err(e) => return uf::new(Err(e)),
                 };
-                return uf::new(Ok(()));
+                return uf::new(Ok(OkWarning{
+                    data: (),
+                    warning: warnings,
+                }));
             }
         },
         Err(e) => return uf::new(Err(e)),

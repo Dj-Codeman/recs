@@ -1,5 +1,4 @@
 use logging::append_log;
-use pretty::notice;
 // use rand::distributions::{Distribution, Uniform};
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
@@ -9,7 +8,10 @@ use std::{
     str,
 };
 use system::{
-    errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray},
+    errors::{
+        ErrorArray, ErrorArrayItem, Errors as SE, OkWarning, UnifiedResult as uf, WarningArray,
+        WarningArrayItem, Warnings as SW,
+    },
     functions::{create_hash, del_file, path_present},
     types::{ClonePath, PathType},
 };
@@ -37,7 +39,11 @@ pub struct KeyIndex {
 }
 
 // ! KEY GENERATION SECTION
-pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+pub fn generate_user_key(
+    debug: bool,
+    mut errors: ErrorArray,
+    mut warnings: WarningArray,
+) -> uf<OkWarning<()>> {
     // This function generates to key we use to encrypt data
     // The key is not actually stored but a value is encrypted with
     // A generated key and saved. At decryption time the key is checked against
@@ -94,42 +100,25 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
 
     match path_present(&system_paths.USER_KEY_LOCATION, errors.clone()).uf_unwrap() {
         Ok(d) => match d {
-            true => match debug {
-                true => {
-                    match del_file(
-                        system_paths.USER_KEY_LOCATION.clone_path(),
-                        errors.clone(),
-                        warnings.clone(),
-                    )
-                    .uf_unwrap()
-                    {
-                        Ok(_) => {
-                            notice(&format!(
-                                "{}: deleted",
-                                system_paths.USER_KEY_LOCATION.to_string()
-                            ));
-                            let _ = append_log(
-                                unsafe { PROGNAME },
-                                "The old userkey has been deleted",
-                                errors.clone(),
-                            );
-                        }
-                        Err(e) => return uf::new(Err(e)),
-                    };
+            true => {
+                if let Err(err) = del_file(
+                    system_paths.USER_KEY_LOCATION.clone_path(),
+                    errors.clone(),
+                    warnings.clone(),
+                )
+                .uf_unwrap()
+                {
+                    return uf::new(Err(err));
                 }
-                false => {
-                    match del_file(
-                        system_paths.USER_KEY_LOCATION.clone_path(),
-                        errors.clone(),
-                        warnings.clone(),
-                    )
-                    .uf_unwrap()
-                    {
-                        Ok(_) => (),
-                        Err(e) => return uf::new(Err(e)),
-                    };
+
+                if debug {
+                    let w = WarningArrayItem::new_details(
+                        SW::Warning,
+                        String::from("DEBUG: Old userkey deleted"),
+                    );
+                    warnings.push(w)
                 }
-            },
+            }
             false => {
                 errors.push(ErrorArrayItem::new(
                     SE::CreatingFile,
@@ -151,6 +140,10 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
         Ok(d) => d,
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(
+                SE::CreatingFile,
+                String::from("Couldn't open userkey file"),
+            ));
             return uf::new(Err(errors));
         }
     };
@@ -174,6 +167,10 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
                 errors.clone(),
             );
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(
+                SE::ReadingFile,
+                String::from("Error writing data to json file for userkey"),
+            ));
             return uf::new(Err(errors));
         }
     };
@@ -197,23 +194,21 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
         PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
 
     // Deleting and recreating the json file
-    let _ = match del_file(
+    if let Err(err) = del_file(
         userkey_map_path.clone_path(),
         errors.clone(),
         warnings.clone(),
     )
     .uf_unwrap()
     {
-        Ok(_) => match debug {
-            true => append_log(
-                unsafe { PROGNAME },
-                "Deleting old usrkey if it exists",
-                errors.clone(),
-            ),
-            false => uf::new(Ok(())),
-        },
-        Err(e) => return uf::new(Err(e)),
-    };
+        return uf::new(Err(err));
+    } else {
+        if debug {
+            let w =
+                WarningArrayItem::new_details(SW::Warning, String::from("Old user key deleted"));
+            warnings.push(w)
+        }
+    }
 
     // writing to the master.json file
     let mut userkey_map_file = match OpenOptions::new()
@@ -224,14 +219,13 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
     {
         Ok(d) => d,
         Err(e) => {
-            let _ = append_log(
-                unsafe { PROGNAME },
-                &format!(
+            errors.push(ErrorArrayItem::new(
+                SE::OpeningFile,
+                format!(
                     "Failed to open the new userkey.json path {}, {}",
                     &userkey_map_path, e
                 ),
-                errors.clone(),
-            );
+            ));
             errors.push(ErrorArrayItem::from(e));
             return uf::new(Err(errors));
         }
@@ -244,14 +238,13 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
                 "User authentication created",
                 errors.clone(),
             );
-            return uf::new(Ok(()));
+            return uf::new(Ok(OkWarning{
+                data: (),
+                warning: warnings,
+            }));
         }
         Err(e) => {
-            let _ = append_log(
-                unsafe { PROGNAME },
-                &format!("Could save map data to file: {}", e),
-                errors.clone(),
-            );
+            errors.push(ErrorArrayItem::new(SE::OpeningFile, format!("Could save map data to file: {}", e)));
             errors.push(ErrorArrayItem::from(e));
             return uf::new(Err(errors));
         }
