@@ -86,10 +86,10 @@ pub fn write(
     };
 
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
-    match append_log(unsafe { PROGNAME }, &msg, errors.clone()).uf_unwrap() {
-        Ok(_) => (),
-        Err(e) => return uf::new(Err(e)),
-    };
+    if let Err(err) = append_log(unsafe { PROGNAME }, &msg, errors.clone()).uf_unwrap() {
+        err.display(false)
+    }
+
 
     // warn(&filename.to_string());
     let system_paths: SystemPaths = SystemPaths::new();
@@ -146,6 +146,10 @@ pub fn write(
             chunk_count,
             full_file_hash,
         };
+
+        if let Err(err) = append_log(unsafe { PROGNAME }, &format!("{:?}", secret_data_struct), errors.clone()).uf_unwrap() {
+            err.display(false)
+        }
 
         // formatting the json data
         let pretty_data_map: Vec<u8> = match serde_json::to_vec_pretty(&secret_data_struct) {
