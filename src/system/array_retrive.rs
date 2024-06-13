@@ -77,6 +77,7 @@ fn read_map_data(map_path: &PathType, mut errors: ErrorArray) -> uf<String> {
         Err(e) => {
             let _ = append_log(unsafe { PROGNAME }, &e.to_string(), errors.clone());
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(SE::OpeningFile, format!("Failed to open: {}", map_path)));
             return uf::new(Err(errors));
         }
     };
@@ -87,6 +88,7 @@ fn read_map_data(map_path: &PathType, mut errors: ErrorArray) -> uf<String> {
         Ok(_) => (),
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("Could not read map data to buffer")));
             return uf::new(Err(errors));
         }
     };
@@ -99,6 +101,7 @@ fn parse_map_data(map_data: &str, mut errors: ErrorArray) -> uf<ChunkMap> {
         Ok(d) => return uf::new(Ok(d)),
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("Failed to convert map data into json")));
             return uf::new(Err(errors));
         }
     }
