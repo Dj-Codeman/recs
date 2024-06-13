@@ -128,7 +128,7 @@ pub fn encrypt(
 pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8>> {
     // * Changing this to run on refrenced data to hopefully run with a smaller ram footprint
     //cipherdata legnth minus the hmac because its appened later
-    let cipherdata_len: usize = cipherdata.len() - 64;
+    let cipherdata_len: usize = cipherdata.len() - 62;
 
     // removed the hmac from the cipher string to generate the new hmac
     let cipherdata_hmacless: &str = truncate(&cipherdata, cipherdata_len);
