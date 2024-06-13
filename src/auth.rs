@@ -3,7 +3,7 @@ use logging::append_log;
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{read_to_string, OpenOptions},
+    fs::{read_to_string, File, OpenOptions},
     io::Write,
     str,
 };
@@ -54,11 +54,13 @@ pub fn generate_user_key(
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
-    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone(), warnings.clone()).uf_unwrap()
-    {
-        Ok(d) => d,
-        Err(e) => return uf::new(Err(e)),
-    };
+    let secret: String =
+        match fetch_chunk_helper(array_arimitics() - 1, errors.clone(), warnings.clone())
+            .uf_unwrap()
+        {
+            Ok(d) => d,
+            Err(e) => return uf::new(Err(e)),
+        };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
         Err(e) => {
@@ -91,7 +93,7 @@ pub fn generate_user_key(
     if debug {
         if let Err(err) = append_log(unsafe { PROGNAME }, &userkey, errors.clone()).uf_unwrap() {
             err.display(false);
-        }  
+        }
     }
     // * creating the integrity file
 
@@ -137,12 +139,7 @@ pub fn generate_user_key(
     }
 
     // creating the master.json file
-    let mut userkey_file = match OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .append(true)
-        .open(&system_paths.USER_KEY_LOCATION)
-    {
+    let mut userkey_file = match File::open(&system_paths.USER_KEY_LOCATION) {
         Ok(d) => d,
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
@@ -244,13 +241,16 @@ pub fn generate_user_key(
                 "User authentication created",
                 errors.clone(),
             );
-            return uf::new(Ok(OkWarning{
+            return uf::new(Ok(OkWarning {
                 data: (),
                 warning: warnings,
             }));
         }
         Err(e) => {
-            errors.push(ErrorArrayItem::new(SE::OpeningFile, format!("Could save map data to file: {}", e)));
+            errors.push(ErrorArrayItem::new(
+                SE::OpeningFile,
+                format!("Could save map data to file: {}", e),
+            ));
             errors.push(ErrorArrayItem::from(e));
             return uf::new(Err(errors));
         }
@@ -269,11 +269,13 @@ pub fn auth_user_key(mut errors: ErrorArray, warnings: WarningArray) -> uf<Strin
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
-    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone(), warnings.clone()).uf_unwrap()
-    {
-        Ok(d) => d,
-        Err(e) => return uf::new(Err(e)),
-    };
+    let secret: String =
+        match fetch_chunk_helper(array_arimitics() - 1, errors.clone(), warnings.clone())
+            .uf_unwrap()
+        {
+            Ok(d) => d,
+            Err(e) => return uf::new(Err(e)),
+        };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
         Err(e) => {
@@ -347,7 +349,12 @@ pub fn auth_user_key(mut errors: ErrorArray, warnings: WarningArray) -> uf<Strin
 
 // todo change these security goals for multi system things
 
-pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray, warnings: WarningArray) -> uf<String> {
+pub fn create_writing_key(
+    key: String,
+    fixed_key: bool,
+    mut errors: ErrorArray,
+    warnings: WarningArray,
+) -> uf<String> {
     // golang compatible ????
     let mut prekey_str: String = String::new();
 
