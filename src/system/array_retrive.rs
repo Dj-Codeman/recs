@@ -128,7 +128,10 @@ fn verify_map_version(
                                     warning: warnings,
                                 }))
                 },
-                Err(e) => return uf::new(Err(e)),
+                Err(e) => {
+                    e.display(false);
+                    return uf::new(Err(ErrorArray::new_container()))
+                }
             }
         }
     };
@@ -143,8 +146,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap, mut errors: ErrorArray) -> uf<Str
     let mut _chunk = String::new(); // TODO make an array or something for this val
     let mut file = match OpenOptions::new()
         .create_new(true)
-        .write(true)
-        .append(false)
+        .append(true)
         .open(system_paths.SYSTEM_ARRAY_LOCATION)
     {
         Ok(d) => d,
