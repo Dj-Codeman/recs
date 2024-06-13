@@ -170,6 +170,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap, mut errors: ErrorArray) -> uf<Str
             Ok(d) => d,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("Failed to set read head")));
                 return uf::new(Err(errors));
             }
         };
@@ -180,6 +181,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap, mut errors: ErrorArray) -> uf<Str
                 break;
             }
             Err(e) => {
+                errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("couldn't read data from array file")));
                 errors.push(ErrorArrayItem::from(e));
                 return uf::new(Err(errors));
             }
