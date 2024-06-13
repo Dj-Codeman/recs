@@ -389,6 +389,9 @@ pub fn write_raw(
     let system_paths: SystemPaths = SystemPaths::new();
 
     // ! making the secret path to append data too
+    if let Err(err) = del_file(dummy_path.clone(), errors.clone(), warnings.clone()).uf_unwrap() {
+        return uf::new(Err(err));
+    };
     let mut dummy_file: File = match File::create(dummy_path.clone_path()) {
         Ok(f) => f,
         Err(e) => {
