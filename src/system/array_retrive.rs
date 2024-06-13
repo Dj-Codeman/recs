@@ -20,7 +20,7 @@ use crate::local_env::SystemPaths;
 use crate::local_env::VERSION;
 use crate::PROGNAME;
 
-pub fn fetch_chunk(num: u32, errors: ErrorArray) -> uf<String> {
+pub fn fetch_chunk(num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<String> {
     let upper_limit = array_arimitics();
     let lower_limit = 1;
 
@@ -33,11 +33,10 @@ pub fn fetch_chunk(num: u32, errors: ErrorArray) -> uf<String> {
         _ => num,
     };
 
-    return fetch_chunk_by_number(map_num, errors);
+    return fetch_chunk_by_number(map_num, errors, warnings);
 }
 
-fn fetch_chunk_by_number(map_num: u32, errors: ErrorArray) -> uf<String> {
-    let warnings = WarningArray::new_container();
+fn fetch_chunk_by_number(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<String> {
     let system_paths: SystemPaths = SystemPaths::new();
     let map_path: PathType =
         PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));

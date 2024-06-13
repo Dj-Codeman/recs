@@ -165,8 +165,8 @@ fn ensure_max_map_exists(errors: ErrorArray) -> uf<()> {
 // Normal actions
 
 /// Insert takes a relative path encrypts and stores files. Weather or not they're deleted is based on values in the config.rs file
-pub fn insert(filename: PathType, owner: String, name: String, errors: ErrorArray) -> uf<()> {
-    match write(filename, owner, name, false, errors).uf_unwrap() {
+pub fn insert(filename: PathType, owner: String, name: String, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+    match write(filename, owner, name, false, errors, warnings).uf_unwrap() {
         Ok(_) => return uf::new(Ok(())),
         Err(e) => return uf::new(Err(e)),
     }
@@ -264,7 +264,7 @@ pub fn update_map(map_num: u32, mut errors: ErrorArray, warnings: WarningArray) 
     let pretty_map_data: ChunkMap = serde_json::from_str(&map_data).unwrap();
 
     // ? calculating new hash
-    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num, errors.clone()).uf_unwrap()
+    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num, errors.clone(), warnings.clone()).uf_unwrap()
     {
         Ok(data) => (true, Some(data)),
         Err(_) => (false, None),
@@ -318,9 +318,9 @@ pub fn update_map(map_num: u32, mut errors: ErrorArray, warnings: WarningArray) 
     return uf::new(Ok(true));
 }
 
-pub fn check_map(map_num: u32, errors: ErrorArray) -> uf<bool> {
+pub fn check_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<bool> {
     // needs to fail gracefuly
-    match fetch_chunk(map_num, errors).uf_unwrap() {
+    match fetch_chunk(map_num, errors, warnings).uf_unwrap() {
         Ok(_) => return uf::new(Ok(true)),
         Err(_) => return uf::new(Ok(false)),
     }

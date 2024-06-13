@@ -50,11 +50,11 @@ pub fn generate_user_key(
     // The stored value. If it is the the same value are originally encrypted
     // We can attempt to decrypt the data given
 
-    let salt: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+    let salt: String = match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
-    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone()).uf_unwrap()
+    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone(), warnings.clone()).uf_unwrap()
     {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
@@ -251,7 +251,7 @@ pub fn generate_user_key(
     };
 }
 
-pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
+pub fn auth_user_key(mut errors: ErrorArray, warnings: WarningArray) -> uf<String> {
     let system_paths: SystemPaths = SystemPaths::new();
     let _ = append_log(
         unsafe { PROGNAME },
@@ -259,11 +259,11 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
         errors.clone(),
     );
 
-    let salt: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+    let salt: String = match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
-    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone()).uf_unwrap()
+    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone(), warnings.clone()).uf_unwrap()
     {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
@@ -341,13 +341,13 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
 
 // todo change these security goals for multi system things
 
-pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray) -> uf<String> {
+pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray, warnings: WarningArray) -> uf<String> {
     // golang compatible ????
     let mut prekey_str: String = String::new();
 
     let user_key: String = match fixed_key {
         true => key.clone(),
-        false => match auth_user_key(errors.clone()).uf_unwrap() {
+        false => match auth_user_key(errors.clone(), warnings.clone()).uf_unwrap() {
             Ok(d) => d,
             Err(e) => return uf::new(Err(e)),
         },
@@ -358,7 +358,7 @@ pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray) 
 
     let prekey = create_hash(prekey_str);
 
-    let salt: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+    let salt: String = match fetch_chunk_helper(1, errors.clone(), warnings).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
@@ -393,8 +393,8 @@ pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray) 
 }
 
 // * helper function for fetching chunks
-fn fetch_chunk_helper(num: u32, errors: ErrorArray) -> uf<String> {
-    let chunk_data: String = match fetch_chunk(num, errors).uf_unwrap() {
+fn fetch_chunk_helper(num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<String> {
+    let chunk_data: String = match fetch_chunk(num, errors, warnings).uf_unwrap() {
         Ok(d) => d,
         Err(e) => {
             return uf::new(Err(e));

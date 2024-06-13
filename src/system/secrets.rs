@@ -47,6 +47,7 @@ pub fn write(
     secret_name: String,
     fixed_key: bool,
     mut errors: ErrorArray,
+    warnings: WarningArray
 ) -> uf<(String, usize)> {
     // String is key data, The u16 is the chunk cound
     //TODO Dep or simplyfy
@@ -162,7 +163,7 @@ pub fn write(
         };
         let cipher_data_map: String = match encrypt(
             pretty_data_map,
-            match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+            match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(d) => d.into(),
                 Err(mut e) => {
                     e.push(ErrorArrayItem::new(SE::OpeningFile, String::from("Error getting chunk data")));
@@ -245,12 +246,13 @@ pub fn write(
                     let secret_buffer = match encrypt(
                         encoded_buffer.as_bytes().to_vec(),
                         match create_writing_key(
-                            match fetch_chunk_helper(num, errors.clone()).uf_unwrap() {
+                            match fetch_chunk_helper(num, errors.clone(), warnings.clone()).uf_unwrap() {
                                 Ok(d) => d,
                                 Err(e) => return uf::new(Err(e)),
                             },
                             fixed_key,
                             errors.clone(),
+                            warnings.clone()
                         )
                         .uf_unwrap()
                         {
@@ -362,12 +364,13 @@ pub fn write(
 
         // resolving the key data
         let key_data: String = match create_writing_key(
-            match fetch_chunk_helper(num, errors.clone()).uf_unwrap() {
+            match fetch_chunk_helper(num, errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(d) => d,
                 Err(e) => return uf::new(Err(e)),
             },
             fixed_key,
             errors.clone(),
+            warnings.clone()
         )
         .uf_unwrap()
         {
@@ -429,6 +432,7 @@ pub fn write_raw(
         dummy_name.to_string(),
         true,
         errors.clone(),
+        warnings.clone()
     )
     .uf_unwrap();
 
@@ -451,7 +455,7 @@ pub fn write_raw(
                     return uf::new(Err(errors));
                 }
             };
-            let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+            let key_data: String = match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(d) => d,
                 Err(e) => return uf::new(Err(e)),
             };
@@ -663,7 +667,7 @@ pub fn read(
     if secret_json_existence {
         let cipher_map_data: String =
             read_to_string(secret_map_path).expect("Couldn't read the map file");
-        let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+        let key_data: String = match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
             Ok(d) => d,
             Err(e) => return uf::new(Err(e)),
         };
@@ -746,12 +750,13 @@ pub fn read(
 
         // generating the secret key for the file
         let writting_key: String = match create_writing_key(
-            match fetch_chunk_helper(secret_map.key, errors.clone()).uf_unwrap() {
+            match fetch_chunk_helper(secret_map.key, errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(d) => d,
                 Err(e) => return uf::new(Err(e)),
             },
             fixed_key,
             errors.clone(),
+            warnings.clone()
         )
         .uf_unwrap()
         {
@@ -1007,7 +1012,7 @@ pub fn forget(
                     }
                 };
 
-                let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+                let key_data: String = match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
                     Ok(d) => d,
                     Err(e) => return uf::new(Err(e)),
                 };
@@ -1070,8 +1075,8 @@ pub fn forget(
 }
 
 // * helper funtion for fetching chunks
-fn fetch_chunk_helper(num: u32, errors: ErrorArray) -> uf<String> {
-    match fetch_chunk(num, errors).uf_unwrap() {
+fn fetch_chunk_helper(num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<String> {
+    match fetch_chunk(num, errors, warnings).uf_unwrap() {
         Ok(d) => return uf::new(Ok(d)),
         Err(e) => return uf::new(Err(e)),
     }
