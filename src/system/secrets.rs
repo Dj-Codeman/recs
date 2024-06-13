@@ -883,11 +883,10 @@ pub fn read(
                             return uf::new(Err(errors));
                         }
                     };
-                    println!("Decrypted chunk {}", secret_buffer);
                     // take the first spliiting chunk into signature and cipher data
                     let encoded_signature: &str = truncate(&secret_buffer, 62); // 61 + how ever big the chunk count is
-                    println!("Encoded signature: {}", encoded_signature);
                     let cipher_buffer: &str = &secret_buffer[63..];
+                    println!("Payload {}", cipher_buffer);
 
                     // * decrypting the chunk
                     let mut decrypted_data: Vec<u8> =
