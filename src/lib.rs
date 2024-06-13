@@ -85,14 +85,14 @@ pub fn initialize(errors: ErrorArray, mut warnings: WarningArray) -> uf<OkWarnin
     };
 
     if let Err(_) = append_log(unsafe { PROGNAME }, "RECS STARTED", errors.clone()).uf_unwrap() {
-        let w = WarningArrayItem::new_details(SW::Warning, String::from("Logging issue occoured"));
+        let w = WarningArrayItem::new_details(SW::Warning, String::from("Logging issue occurred"));
         warnings.push(w);
     }
 
     match ensure_system_path(unsafe { PROGNAME }, debug, errors.clone(), warnings.clone())
         .uf_unwrap()
     {
-        Ok(d) => warnings.append(d.warning),
+        Ok(_) => (),
         Err(e) => return uf::new(Err(e)),
     };
 
@@ -138,7 +138,7 @@ fn ensure_system_path(
                 }
 
                 match set_system(debug, errors.clone(), warnings.clone()).uf_unwrap() {
-                    Ok(d) => warnings.append(d.warning),
+                    Ok(_) => (),
                     Err(e) => return uf::new(Err(e)),
                 };
                 return uf::new(Ok(OkWarning{

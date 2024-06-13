@@ -65,10 +65,9 @@ pub fn set_system(debug: bool, errors: ErrorArray, mut warnings: WarningArray) -
     };
 
     match generate_system_array(errors.clone(), warnings.clone(), debug).uf_unwrap() {
-        Ok(b) => {
-            warnings.append(b.warning);
+        Ok(_) => {
             match index_system_array(errors.clone(), warnings.clone(), debug).uf_unwrap() {
-                Ok(d) => {
+                Ok(_) => {
                     if let Err(_) = append_log(
                         unsafe { PROGNAME },
                         "System array has been created and indexed",
@@ -77,7 +76,6 @@ pub fn set_system(debug: bool, errors: ErrorArray, mut warnings: WarningArray) -
                         let w = WarningArrayItem::new_details(SW::Warning, String::from("Logging issue occoured"));
                         warnings.push(w);
                     }; 
-                    warnings.append(d.warning);
                 },
                 Err(e) => return uf::new(Err(e)),
             }

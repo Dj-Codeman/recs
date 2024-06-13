@@ -213,7 +213,7 @@ pub fn index_system_array(
                     PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
 
                 // attempt to delete the old key map
-                if let Err(err) = del_file(
+                if let Err(_) = del_file(
                     chunk_map_path.clone_path(),
                     errors.clone(),
                     warnings.clone(),
@@ -223,8 +223,7 @@ pub fn index_system_array(
                     warnings.push(WarningArrayItem::new_details(
                         SW::Warning,
                         String::from("Couldn't delete a map file"),
-                    ));
-                    errors.append(err);
+                    ))
                 }
 
                 let pretty_chunk_map = match serde_json::to_string_pretty(&chunk_map) {
