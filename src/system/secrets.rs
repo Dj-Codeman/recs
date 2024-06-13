@@ -305,6 +305,7 @@ pub fn write(
                     let mut processed_chunk: String = String::new();
                     processed_chunk.push_str(&signature);
                     processed_chunk.push_str(&secret_buffer);
+                    println!("Processed chunk {}", processed_chunk);
                     // ! THIS IS WHERE THE FILE IS OPENED
 
                     match write!(secret_file, "{}", processed_chunk) {
@@ -881,7 +882,7 @@ pub fn read(
                             return uf::new(Err(errors));
                         }
                     };
-
+                    println!("Decrypted chunk {}", secret_buffer);
                     // take the first spliiting chunk into signature and cipher data
                     let encoded_signature: &str = truncate(&secret_buffer, 64); // 61 + how ever big the chunk count is
                     let cipher_buffer: &str = &secret_buffer[64..];
