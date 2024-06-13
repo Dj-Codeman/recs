@@ -101,7 +101,7 @@ pub fn encrypt(
     // creating hmac
     let hmac = match create_hmac(&cipherdata, &safe_derive_key, errors.clone()).uf_unwrap() {
         Ok(d) => {
-            println!("{}", d);
+            println!("Generated hmac {}", d);
             d
         },
         Err(e) => return uf::new(Err(e)),
@@ -142,7 +142,7 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
         Err(e) => return uf::new(Err(e)),
     };
 
-    println!("{}\n{}", old_hmac, new_hmac);
+    println!("Old hmac {}\nNew hmac{}", old_hmac, new_hmac);
 
     // verifing hmac
     match old_hmac == new_hmac {
