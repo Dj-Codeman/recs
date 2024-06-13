@@ -119,6 +119,7 @@ pub fn write(
             Ok(d) => PathType::PathBuf(d),
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(SE::OpeningFile, format!("Error opening the canon path {}", filename)));
                 return uf::new(Err(errors));
             }
         };
@@ -151,6 +152,7 @@ pub fn write(
             Ok(d) => d,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("Couldn't decode data from map file")));
                 return uf::new(Err(errors));
             }
         };
@@ -175,6 +177,7 @@ pub fn write(
             Ok(f) => f,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(SE::OpeningFile, format!("Couldn't open the file: {}", filename)));
                 return uf::new(Err(errors));
             }
         };
