@@ -419,6 +419,8 @@ pub fn write_raw(
     )
     .uf_unwrap();
 
+    println!("{:#?}", &results);
+
     match results {
         Ok((data, count)) => {
             // got the key now get the cipher data
