@@ -143,11 +143,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap, mut errors: ErrorArray) -> uf<Str
     let mut buffer: Vec<u8> = vec![0; CHUNK_SIZE as usize];
 
     let mut _chunk = String::new(); // TODO make an array or something for this val
-    let mut file = match OpenOptions::new()
-        .create_new(true)
-        .append(true)
-        .open(system_paths.SYSTEM_ARRAY_LOCATION)
-    {
+    let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION){
         Ok(d) => d,
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
