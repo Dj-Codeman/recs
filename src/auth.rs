@@ -100,10 +100,13 @@ pub fn generate_user_key(
         };
 
     let system_paths: SystemPaths = SystemPaths::new();
+    let userkey_exists = path_present(&system_paths.USER_KEY_LOCATION, errors.clone()).uf_unwrap();
 
-    match path_present(&system_paths.USER_KEY_LOCATION, errors.clone()).uf_unwrap() {
-        Ok(d) => match d {
-            true => {
+    if let Err(err) =  userkey_exists.clone() {
+        return uf::new(Err(err))
+    } else {
+        if let Ok(b) = userkey_exists {
+            if b {
                 if let Err(err) = del_file(
                     system_paths.USER_KEY_LOCATION.clone_path(),
                     errors.clone(),
@@ -122,19 +125,7 @@ pub fn generate_user_key(
                     warnings.push(w)
                 }
             }
-            false => {
-                match generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
-                    Ok(d) => {
-                        return uf::new(Ok(d))
-                    },
-                    Err(mut e) => {
-                        e.push(ErrorArrayItem::new(SE::CreatingFile, String::from("The user key doesn't exist, recs is in a erroneous state")));
-                        return uf::new(Err(e))
-                    }
-                }
-            }
-        },
-        Err(e) => return uf::new(Err(e)),
+        }
     }
 
     // creating the master.json file
