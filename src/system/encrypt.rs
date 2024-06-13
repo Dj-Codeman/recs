@@ -136,13 +136,14 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
 
     // getting old and new hmac values
     let old_hmac: String = cipherdata
-        .substring(cipherdata_len, cipherdata_len + 64)
+        .substring(cipherdata_len, cipherdata_len + 80)
         .to_owned();
     let new_hmac: String = match create_hmac(cipherdata_hmacless, key, errors.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
 
+    println!("{}\n{}", old_hmac, new_hmac);
 
     // verifing hmac
     match old_hmac == new_hmac {
