@@ -3,9 +3,7 @@ use logging::append_log;
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{read_to_string, File, OpenOptions},
-    io::Write,
-    str,
+    fs::{read_to_string, File, OpenOptions}, io::Write, num::NonZeroU32, str
 };
 use system::{
     errors::{
@@ -44,12 +42,6 @@ pub fn generate_user_key(
     mut errors: ErrorArray,
     mut warnings: WarningArray,
 ) -> uf<OkWarning<()>> {
-    // This function generates to key we use to encrypt data
-    // The key is not actually stored but a value is encrypted with
-    // A generated key and saved. At decryption time the key is checked against
-    // The stored value. If it is the the same value are originally encrypted
-    // We can attempt to decrypt the data given
-
     let salt: String = match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
@@ -68,7 +60,7 @@ pub fn generate_user_key(
             return uf::new(Err(errors));
         }
     };
-    let iteration = match std::num::NonZeroU32::new(num) {
+    let iteration = match NonZeroU32::new(num) {
         Some(d) => d,
         None => {
             errors.push(ErrorArrayItem::new(
@@ -139,44 +131,31 @@ pub fn generate_user_key(
     }
 
     // creating the master.json file
-    let mut userkey_file = match File::open(&system_paths.USER_KEY_LOCATION) {
+    let mut userkey_file = match File::create(&system_paths.USER_KEY_LOCATION) {
         Ok(d) => d,
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
             errors.push(ErrorArrayItem::new(
                 SE::CreatingFile,
-                String::from("Couldn't open userkey file"),
+                String::from("Couldn't create userkey file"),
             ));
             return uf::new(Err(errors));
         }
     };
 
-    let _ = match write!(userkey_file, "{}", cipher_integrity) {
-        Ok(_) => match debug {
-            true => append_log(
-                unsafe { PROGNAME },
-                &format!(
-                    "THIS IS A SECRET. The userkey check has been generated: {}",
-                    &cipher_integrity
-                ),
-                errors.clone(),
-            ),
-            false => uf::new(Ok(())),
-        },
-        Err(e) => {
-            let _ = append_log(
-                unsafe { PROGNAME },
-                "An error occoured while writing data to the master json file",
-                errors.clone(),
-            );
-            errors.push(ErrorArrayItem::from(e));
-            errors.push(ErrorArrayItem::new(
-                SE::ReadingFile,
-                String::from("Error writing data to json file for userkey"),
-            ));
-            return uf::new(Err(errors));
-        }
-    };
+    if let Err(e) = write!(userkey_file, "{}", cipher_integrity) {
+        append_log(
+            unsafe { PROGNAME },
+            "An error occurred while writing data to the master json file",
+            errors.clone(),
+        );
+        errors.push(ErrorArrayItem::from(e));
+        errors.push(ErrorArrayItem::new(
+            SE::ReadingFile,
+            String::from("Error writing data to json file for userkey"),
+        ));
+        return uf::new(Err(errors));
+    }
 
     let checksum_string = create_hash(cipher_integrity);
 
@@ -215,9 +194,9 @@ pub fn generate_user_key(
 
     // writing to the master.json file
     let mut userkey_map_file = match OpenOptions::new()
-        .create_new(true)
+        .create(true) // Use create instead of create_new
         .write(true)
-        .append(true)
+        .truncate(true)
         .open(&userkey_map_path)
     {
         Ok(d) => d,
@@ -234,27 +213,25 @@ pub fn generate_user_key(
         }
     };
 
-    match writeln!(userkey_map_file, "{}", pretty_userkey_map) {
-        Ok(_) => {
-            let _ = append_log(
-                unsafe { PROGNAME },
-                "User authentication created",
-                errors.clone(),
-            );
-            return uf::new(Ok(OkWarning {
-                data: (),
-                warning: warnings,
-            }));
-        }
-        Err(e) => {
-            errors.push(ErrorArrayItem::new(
-                SE::OpeningFile,
-                format!("Could save map data to file: {}", e),
-            ));
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
-        }
-    };
+    if let Err(e) = writeln!(userkey_map_file, "{}", pretty_userkey_map) {
+        errors.push(ErrorArrayItem::new(
+            SE::OpeningFile,
+            format!("Could not save map data to file: {}", e),
+        ));
+        errors.push(ErrorArrayItem::from(e));
+        return uf::new(Err(errors));
+    }
+
+    append_log(
+        unsafe { PROGNAME },
+        "User authentication created",
+        errors.clone(),
+    );
+
+    uf::new(Ok(OkWarning {
+        data: (),
+        warning: warnings,
+    }))
 }
 
 pub fn auth_user_key(mut errors: ErrorArray, warnings: WarningArray) -> uf<String> {

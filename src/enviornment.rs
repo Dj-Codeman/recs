@@ -64,36 +64,33 @@ pub fn set_system(debug: bool, errors: ErrorArray, mut warnings: WarningArray) -
         Err(e) => return uf::new(Err(e)),
     };
 
-    match generate_system_array(errors.clone(), warnings.clone(), debug).uf_unwrap() {
-        Ok(_) => {
-            match index_system_array(errors.clone(), warnings.clone(), debug).uf_unwrap() {
-                Ok(_) => {
-                    if let Err(_) = append_log(
-                        unsafe { PROGNAME },
-                        "System array has been created and indexed",
-                        errors.clone(),
-                    ).uf_unwrap() {
-                        let w = WarningArrayItem::new_details(SW::Warning, String::from("Logging issue occoured"));
-                        warnings.push(w);
-                    }; 
-                },
-                Err(e) => return uf::new(Err(e)),
+    let system_path = SystemPaths::new();
+    let system_array_exists: bool = path_present(&system_path.SYSTEM_ARRAY_LOCATION, errors.clone()).unwrap();
+    let system_userkey_exists : bool = path_present(&system_path.USER_KEY_LOCATION, errors.clone()).unwrap();
+
+    if !system_array_exists {
+        if let Ok(_) = generate_system_array(errors.clone(), warnings.clone(), debug).uf_unwrap() {
+            if let Ok(_) = index_system_array(errors.clone(), warnings.clone(), debug).uf_unwrap() {
+                if debug {
+                    warnings.push(WarningArrayItem::new_details(SW::Warning, String::from("System array generated and indexed")))
+                }
             }
-            
-        },
-        Err(mut e) => {
-            e.push(ErrorArrayItem { err_type: SE::GeneralError, err_mesg: String::from("Failed to generate system array") });
-            return uf::new(Err(e))
-        },
+        }
     }
 
-    match generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
-        Ok(_) => return uf::new(Ok(OkWarning {
-            data: (),
-            warning: warnings,
-        })),
-        Err(e) => return uf::new(Err(e)),
+    if !system_userkey_exists {
+        if let Ok(_) = generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {            
+            if debug {
+                warnings.push(WarningArrayItem::new_details(SW::Warning, String::from("Userkey generated, if this is the first run ignore this ")))
+            }
+        }
     }
+
+    return uf::new(Ok(OkWarning{
+        data: (),
+        warning: warnings,
+    }))
+
 }
 
 // ! environment as in file paths

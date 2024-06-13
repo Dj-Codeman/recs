@@ -123,6 +123,8 @@ fn ensure_system_path(
         warnings.push(w);
     }
 
+    
+
     match path_present(&system_paths.USER_KEY_LOCATION, errors.clone()).uf_unwrap() {
         Ok(d) => match d {
             true => {
