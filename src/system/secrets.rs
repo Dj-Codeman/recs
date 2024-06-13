@@ -164,7 +164,10 @@ pub fn write(
             pretty_data_map,
             match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
                 Ok(d) => d.into(),
-                Err(e) => return uf::new(Err(e)),
+                Err(mut e) => {
+                    e.push(ErrorArrayItem::new(SE::OpeningFile, String::from("Error getting chunk data")));
+                    return uf::new(Err(e))
+                }
             },
             1024,
             errors.clone(),
@@ -173,7 +176,10 @@ pub fn write(
         {
             // ! system files like keys and maps are set to 1024 for buffer to make reading simple
             Ok(d) => d,
-            Err(e) => return uf::new(Err(e)),
+            Err(mut e) => {
+                e.push(ErrorArrayItem::new(SE::OpeningFile, String::from("failed to get cipher data map")));
+                return uf::new(Err(e))
+            }
         };
 
         // TODO Stream this data with the buffer functions we have already
@@ -202,6 +208,7 @@ pub fn write(
             Ok(d) => d,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(SE::OpeningFile, format!("Failed to open secret file path {}", secret_path)));
                 return uf::new(Err(errors));
             }
         };
