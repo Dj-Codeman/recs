@@ -272,6 +272,7 @@ pub fn write(
 
                     // hexing all the data for handeling
                     let signature: String = hex::encode(sig_data);
+                    println!("Encoded signature {}", signature);
                     // * Running the actual encryption
                     let secret_buffer = match encrypt(
                         encoded_buffer.as_bytes().to_vec(),
@@ -885,6 +886,7 @@ pub fn read(
                     println!("Decrypted chunk {}", secret_buffer);
                     // take the first spliiting chunk into signature and cipher data
                     let encoded_signature: &str = truncate(&secret_buffer, 64); // 61 + how ever big the chunk count is
+                    println!("Encoded signature: {}", encoded_signature);
                     let cipher_buffer: &str = &secret_buffer[64..];
 
                     // * decrypting the chunk
