@@ -139,6 +139,8 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
         Err(e) => return uf::new(Err(e)),
     };
 
+    println!("{}\n{}", old_hmac, new_hmac);
+
     // verifing hmac
     match old_hmac == new_hmac {
         true => {
