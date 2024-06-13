@@ -3,7 +3,10 @@ use logging::append_log;
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{read_to_string, File, OpenOptions}, io::Write, num::NonZeroU32, str
+    fs::{read_to_string, File, OpenOptions},
+    io::Write,
+    num::NonZeroU32,
+    str,
 };
 use system::{
     errors::{
@@ -120,11 +123,15 @@ pub fn generate_user_key(
                 }
             }
             false => {
-                errors.push(ErrorArrayItem::new(
-                    SE::CreatingFile,
-                    format!("file {} not created", &system_paths.USER_KEY_LOCATION),
-                ));
-                return uf::new(Err(errors));
+                match generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
+                    Ok(d) => {
+                        return uf::new(Ok(d))
+                    },
+                    Err(mut e) => {
+                        e.push(ErrorArrayItem::new(SE::CreatingFile, String::from("The user key doesn't exist, recs is in a erroneous state")));
+                        return uf::new(Err(e))
+                    }
+                }
             }
         },
         Err(e) => return uf::new(Err(e)),
