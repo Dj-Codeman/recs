@@ -97,6 +97,7 @@ pub fn write(
     // testing if the file exists
     // let filename_existence: bool = path_present(&filename, errors.clone()).unwrap(); //TODO handle this
     let filename_existence: bool = path_present(&PathType::PathBuf(canonicalize(&filename).unwrap()), errors.clone()).unwrap(); //TODO handle this
+    println!("{}", filename_existence);
 
     if filename_existence {
         // creating the encrypted meta data file
