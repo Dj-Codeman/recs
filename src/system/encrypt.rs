@@ -132,6 +132,7 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
 
     // removed the hmac from the cipher string to generate the new hmac
     let cipherdata_hmacless: &str = truncate(&cipherdata, cipherdata_len);
+    println!("Payload without hmac: {}", cipherdata_hmacless);
 
     // getting old and new hmac values
     let old_hmac: String = cipherdata
