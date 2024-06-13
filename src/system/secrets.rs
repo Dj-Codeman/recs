@@ -884,8 +884,8 @@ pub fn read(
                         }
                     };
                     // take the first spliiting chunk into signature and cipher data
-                    let encoded_signature: &str = truncate(&secret_buffer, 62); // 61 + how ever big the chunk count is
-                    let cipher_buffer: &str = &secret_buffer[62..];
+                    let encoded_signature: &str = truncate(&secret_buffer, 64); // 61 + how ever big the chunk count is
+                    let cipher_buffer: &str = &secret_buffer[64..];
                     println!("Payload {}", cipher_buffer);
 
                     // * decrypting the chunk
