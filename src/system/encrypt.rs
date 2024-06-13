@@ -100,7 +100,10 @@ pub fn encrypt(
 
     // creating hmac
     let hmac = match create_hmac(&cipherdata, &safe_derive_key, errors.clone()).uf_unwrap() {
-        Ok(d) => d,
+        Ok(d) => {
+            println!("{}", d);
+            d
+        },
         Err(e) => return uf::new(Err(e)),
     };
 
