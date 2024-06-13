@@ -82,7 +82,7 @@ pub fn write(
     let buffer_size: usize = if fit_buffer <= max_buffer_size {
         fit_buffer
     } else {
-        fit_buffer / 2 // TODO make sure this doesnot fail
+        fit_buffer / 2
     };
 
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
@@ -95,7 +95,7 @@ pub fn write(
     let system_paths: SystemPaths = SystemPaths::new();
 
     // testing if the file exists
-    let filename_existence: bool = path_present(&filename, errors.clone()).unwrap();
+    let filename_existence: bool = path_present(&filename, errors.clone()).unwrap(); //TODO handle this
 
     if filename_existence {
         // creating the encrypted meta data file
@@ -189,8 +189,7 @@ pub fn write(
         // ! making the secret path to append data too
         let mut secret_file = match OpenOptions::new()
             .create_new(true)
-            .write(true)
-            .append(false)
+            .append(true)
             .open(secret_path.clone())
         {
             Ok(d) => d,
