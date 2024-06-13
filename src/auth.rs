@@ -87,6 +87,12 @@ pub fn generate_user_key(
     );
 
     let userkey = hex::encode(&password_key);
+
+    if debug {
+        if let Err(err) = append_log(unsafe { PROGNAME }, &userkey, errors.clone()).uf_unwrap() {
+            err.display(false);
+        }  
+    }
     // * creating the integrity file
 
     let secret: String = "The hotdog man isn't real !?".to_string();

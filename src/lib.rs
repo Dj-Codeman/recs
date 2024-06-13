@@ -123,7 +123,7 @@ fn ensure_system_path(
         warnings.push(w);
     }
 
-    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
+    match path_present(&system_paths.USER_KEY_LOCATION, errors.clone()).uf_unwrap() {
         Ok(d) => match d {
             true => {
                 return uf::new(Ok(OkWarning {
@@ -132,7 +132,7 @@ fn ensure_system_path(
                 }))
             }
             false => {
-                if let Err(_) = append_log(prog, "System array file does not exist", errors.clone()).uf_unwrap() {
+                if let Err(_) = append_log(prog, "User key file does not exist", errors.clone()).uf_unwrap() {
                     let w = WarningArrayItem::new_details(SW::Warning, String::from("Logging issue occurred"));
                     warnings.push(w);
                 }
