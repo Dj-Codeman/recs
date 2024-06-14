@@ -151,7 +151,7 @@ pub fn write(
             unique_id,
             file_path: canon_path,
             secret_path: secret_path.clone(),
-            buffer_size: buffer_size as usize,
+            buffer_size,
             chunk_count,
             full_file_hash,
         };

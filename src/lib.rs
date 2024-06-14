@@ -168,7 +168,7 @@ fn ensure_max_map_exists(errors: ErrorArray) -> uf<()> {
 
 /// Insert takes a relative path encrypts and stores files. Weather or not they're deleted is based on values in the config.rs file
 pub fn insert(filename: PathType, owner: String, name: String, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
-    match write(filename, owner, name, false, errors, warnings).uf_unwrap() { // ! set fixed key to false when done
+    match write(filename, owner, name, true, errors, warnings).uf_unwrap() { // ! set fixed key to false when done
         Ok(_) => return uf::new(Ok(())),
         Err(e) => return uf::new(Err(e)),
     }
@@ -182,7 +182,7 @@ pub fn retrieve(
     errors: ErrorArray,
     warnings: WarningArray,
 ) -> uf<(PathType, PathType)> {
-    match read(owner, name, uid, false, errors, warnings).uf_unwrap() {
+    match read(owner, name, uid, true, errors, warnings).uf_unwrap() {
         Ok(d) => {
             d.warning.display();
             return uf::new(Ok(d.data));
