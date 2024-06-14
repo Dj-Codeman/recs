@@ -2,7 +2,7 @@ use logging::append_log;
 use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
 use system::{
-    errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf, WarningArray},
+    errors::{ErrorArray, ErrorArrayItem, Errors as SE, Warnings as SW, OkWarning, UnifiedResult as uf, WarningArray, WarningArrayItem},
     functions::{make_dir, path_present},
     types::{ClonePath, PathType},
 };
@@ -19,7 +19,7 @@ use crate::{
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[allow(non_snake_case)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SystemPaths {
     pub SYSTEM_PATH: PathType,
     pub DATA: PathType,
@@ -56,7 +56,7 @@ impl SystemPaths {
 
 // !  enviornment as in program
 
-pub fn set_system(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+pub fn set_system(debug: bool, errors: ErrorArray, mut warnings: WarningArray) -> uf<OkWarning<()>> {
     // This functions is responsible for creating the dir tree,
     // It also monitors the output of the functions that create keys and indexs for them
     match make_folders(debug, errors.clone()).uf_unwrap() {
@@ -64,25 +64,33 @@ pub fn set_system(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf
         Err(e) => return uf::new(Err(e)),
     };
 
-    match generate_system_array(errors.clone()).uf_unwrap() {
-        Ok(_) => {
-            match index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
-                Ok(_) => append_log(
-                    unsafe { PROGNAME },
-                    "System array has been created and indexed",
-                    errors.clone(),
-                ),
+    let system_path = SystemPaths::new();
+    let system_array_exists: bool = path_present(&system_path.SYSTEM_ARRAY_LOCATION, errors.clone()).unwrap();
+    let system_userkey_exists : bool = path_present(&system_path.USER_KEY_LOCATION, errors.clone()).unwrap();
 
-                Err(e) => return uf::new(Err(e)),
-            };
+    if !system_array_exists {
+        if let Ok(_) = generate_system_array(errors.clone(), warnings.clone(), debug).uf_unwrap() {
+            if let Ok(_) = index_system_array(errors.clone(), warnings.clone(), debug).uf_unwrap() {
+                if debug {
+                    warnings.push(WarningArrayItem::new_details(SW::Warning, String::from("System array generated and indexed")))
+                }
+            }
         }
-        Err(e) => return uf::new(Err(e)),
-    };
-
-    match generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
-        Ok(_) => uf::new(Ok(())),
-        Err(e) => return uf::new(Err(e)),
     }
+
+    if !system_userkey_exists {
+        if let Ok(_) = generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {            
+            if debug {
+                warnings.push(WarningArrayItem::new_details(SW::Warning, String::from("Userkey generated, if this is the first run ignore this ")))
+            }
+        }
+    }
+
+    return uf::new(Ok(OkWarning{
+        data: (),
+        warning: warnings,
+    }))
+
 }
 
 // ! environment as in file paths

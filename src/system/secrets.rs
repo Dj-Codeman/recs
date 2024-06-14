@@ -47,6 +47,7 @@ pub fn write(
     secret_name: String,
     fixed_key: bool,
     mut errors: ErrorArray,
+    warnings: WarningArray,
 ) -> uf<(String, usize)> {
     // String is key data, The u16 is the chunk cound
     //TODO Dep or simplyfy
@@ -82,20 +83,24 @@ pub fn write(
     let buffer_size: usize = if fit_buffer <= max_buffer_size {
         fit_buffer
     } else {
-        fit_buffer / 2 // TODO make sure this doesnot fail
+        fit_buffer / 2
     };
 
     let msg = format!("{} '{}'", "Attempting to encrypt", &filename);
-    match append_log(unsafe { PROGNAME }, &msg, errors.clone()).uf_unwrap() {
-        Ok(_) => (),
-        Err(e) => return uf::new(Err(e)),
-    };
+    if let Err(err) = append_log(unsafe { PROGNAME }, &msg, errors.clone()).uf_unwrap() {
+        err.display(false)
+    }
 
     // warn(&filename.to_string());
     let system_paths: SystemPaths = SystemPaths::new();
 
     // testing if the file exists
-    let filename_existence: bool = path_present(&filename, errors.clone()).unwrap();
+    // let filename_existence: bool = path_present(&filename, errors.clone()).unwrap(); //TODO handle this
+    let filename_existence: bool = path_present(
+        &PathType::PathBuf(canonicalize(&filename).unwrap()),
+        errors.clone(),
+    )
+    .unwrap(); //TODO handle this
 
     if filename_existence {
         // creating the encrypted meta data file
@@ -115,10 +120,15 @@ pub fn write(
         // creating the rest of the struct data
         let unique_id: String =
             truncate(&encode(create_hash(filename.to_string())), 20).to_string();
+
         let canon_path: PathType = match canonicalize(&filename) {
             Ok(d) => PathType::PathBuf(d),
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(
+                    SE::OpeningFile,
+                    format!("Error opening the canon path {}", filename),
+                ));
                 return uf::new(Err(errors));
             }
         };
@@ -141,24 +151,44 @@ pub fn write(
             unique_id,
             file_path: canon_path,
             secret_path: secret_path.clone(),
-            buffer_size: buffer_size as usize,
+            buffer_size,
             chunk_count,
             full_file_hash,
         };
+
+        if let Err(err) = append_log(
+            unsafe { PROGNAME },
+            &format!("{:?}", secret_data_struct),
+            errors.clone(),
+        )
+        .uf_unwrap()
+        {
+            err.display(false)
+        }
 
         // formatting the json data
         let pretty_data_map: Vec<u8> = match serde_json::to_vec_pretty(&secret_data_struct) {
             Ok(d) => d,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(
+                    SE::ReadingFile,
+                    String::from("Couldn't decode data from map file"),
+                ));
                 return uf::new(Err(errors));
             }
         };
         let cipher_data_map: String = match encrypt(
             pretty_data_map,
-            match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+            match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(d) => d.into(),
-                Err(e) => return uf::new(Err(e)),
+                Err(mut e) => {
+                    e.push(ErrorArrayItem::new(
+                        SE::OpeningFile,
+                        String::from("Error getting chunk data"),
+                    ));
+                    return uf::new(Err(e));
+                }
             },
             1024,
             errors.clone(),
@@ -167,7 +197,13 @@ pub fn write(
         {
             // ! system files like keys and maps are set to 1024 for buffer to make reading simple
             Ok(d) => d,
-            Err(e) => return uf::new(Err(e)),
+            Err(mut e) => {
+                e.push(ErrorArrayItem::new(
+                    SE::OpeningFile,
+                    String::from("failed to get cipher data map"),
+                ));
+                return uf::new(Err(e));
+            }
         };
 
         // TODO Stream this data with the buffer functions we have already
@@ -175,6 +211,10 @@ pub fn write(
             Ok(f) => f,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(
+                    SE::OpeningFile,
+                    format!("Couldn't open the file: {}", filename),
+                ));
                 return uf::new(Err(errors));
             }
         };
@@ -190,12 +230,16 @@ pub fn write(
         let mut secret_file = match OpenOptions::new()
             .create_new(true)
             .write(true)
-            .append(false)
+            .append(true)
             .open(secret_path.clone())
         {
             Ok(d) => d,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(
+                    SE::OpeningFile,
+                    format!("Failed to open secret file path {}", secret_path),
+                ));
                 return uf::new(Err(errors));
             }
         };
@@ -228,16 +272,20 @@ pub fn write(
 
                     // hexing all the data for handeling
                     let signature: String = hex::encode(sig_data);
+                    println!("Encoded signature {}", signature);
                     // * Running the actual encryption
                     let secret_buffer = match encrypt(
                         encoded_buffer.as_bytes().to_vec(),
                         match create_writing_key(
-                            match fetch_chunk_helper(num, errors.clone()).uf_unwrap() {
+                            match fetch_chunk_helper(num, errors.clone(), warnings.clone())
+                                .uf_unwrap()
+                            {
                                 Ok(d) => d,
                                 Err(e) => return uf::new(Err(e)),
                             },
                             fixed_key,
                             errors.clone(),
+                            warnings.clone(),
                         )
                         .uf_unwrap()
                         {
@@ -258,6 +306,7 @@ pub fn write(
                     let mut processed_chunk: String = String::new();
                     processed_chunk.push_str(&signature);
                     processed_chunk.push_str(&secret_buffer);
+                    println!("Processed chunk {}", processed_chunk);
                     // ! THIS IS WHERE THE FILE IS OPENED
 
                     match write!(secret_file, "{}", processed_chunk) {
@@ -349,12 +398,13 @@ pub fn write(
 
         // resolving the key data
         let key_data: String = match create_writing_key(
-            match fetch_chunk_helper(num, errors.clone()).uf_unwrap() {
+            match fetch_chunk_helper(num, errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(d) => d,
                 Err(e) => return uf::new(Err(e)),
             },
             fixed_key,
             errors.clone(),
+            warnings.clone(),
         )
         .uf_unwrap()
         {
@@ -389,6 +439,9 @@ pub fn write_raw(
     let system_paths: SystemPaths = SystemPaths::new();
 
     // ! making the secret path to append data too
+    if let Err(err) = del_file(dummy_path.clone(), errors.clone(), warnings.clone()).uf_unwrap() {
+        return uf::new(Err(err));
+    };
     let mut dummy_file: File = match File::create(dummy_path.clone_path()) {
         Ok(f) => f,
         Err(e) => {
@@ -413,8 +466,11 @@ pub fn write_raw(
         dummy_name.to_string(),
         true,
         errors.clone(),
+        warnings.clone(),
     )
     .uf_unwrap();
+
+    println!("{:#?}", &results);
 
     match results {
         Ok((data, count)) => {
@@ -433,10 +489,11 @@ pub fn write_raw(
                     return uf::new(Err(errors));
                 }
             };
-            let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
-                Ok(d) => d,
-                Err(e) => return uf::new(Err(e)),
-            };
+            let key_data: String =
+                match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
+                    Ok(d) => d,
+                    Err(e) => return uf::new(Err(e)),
+                };
 
             let secret_map_data: Vec<u8> =
                 match decrypt(&cipher_map_data, &key_data, errors.clone()).uf_unwrap() {
@@ -645,10 +702,11 @@ pub fn read(
     if secret_json_existence {
         let cipher_map_data: String =
             read_to_string(secret_map_path).expect("Couldn't read the map file");
-        let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
-            Ok(d) => d,
-            Err(e) => return uf::new(Err(e)),
-        };
+        let key_data: String =
+            match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
+                Ok(d) => d,
+                Err(e) => return uf::new(Err(e)),
+            };
 
         let secret_map_data = match decrypt(&cipher_map_data, &key_data, errors.clone()).uf_unwrap()
         {
@@ -728,12 +786,13 @@ pub fn read(
 
         // generating the secret key for the file
         let writting_key: String = match create_writing_key(
-            match fetch_chunk_helper(secret_map.key, errors.clone()).uf_unwrap() {
+            match fetch_chunk_helper(secret_map.key, errors.clone(), warnings.clone()).uf_unwrap() {
                 Ok(d) => d,
                 Err(e) => return uf::new(Err(e)),
             },
             fixed_key,
             errors.clone(),
+            warnings.clone(),
         )
         .uf_unwrap()
         {
@@ -824,10 +883,10 @@ pub fn read(
                             return uf::new(Err(errors));
                         }
                     };
-
                     // take the first spliiting chunk into signature and cipher data
                     let encoded_signature: &str = truncate(&secret_buffer, 64); // 61 + how ever big the chunk count is
                     let cipher_buffer: &str = &secret_buffer[64..];
+                    println!("Payload {}", cipher_buffer);
 
                     // * decrypting the chunk
                     let mut decrypted_data: Vec<u8> =
@@ -989,10 +1048,11 @@ pub fn forget(
                     }
                 };
 
-                let key_data: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
-                    Ok(d) => d,
-                    Err(e) => return uf::new(Err(e)),
-                };
+                let key_data: String =
+                    match fetch_chunk_helper(1, errors.clone(), warnings.clone()).uf_unwrap() {
+                        Ok(d) => d,
+                        Err(e) => return uf::new(Err(e)),
+                    };
 
                 let secret_map_data =
                     match decrypt(&cipher_map_data, &key_data, errors.clone()).uf_unwrap() {
@@ -1052,8 +1112,8 @@ pub fn forget(
 }
 
 // * helper funtion for fetching chunks
-fn fetch_chunk_helper(num: u32, errors: ErrorArray) -> uf<String> {
-    match fetch_chunk(num, errors).uf_unwrap() {
+fn fetch_chunk_helper(num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<String> {
+    match fetch_chunk(num, errors, warnings).uf_unwrap() {
         Ok(d) => return uf::new(Ok(d)),
         Err(e) => return uf::new(Err(e)),
     }

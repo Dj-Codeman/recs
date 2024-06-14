@@ -20,7 +20,7 @@ use crate::local_env::SystemPaths;
 use crate::local_env::VERSION;
 use crate::PROGNAME;
 
-pub fn fetch_chunk(num: u32, errors: ErrorArray) -> uf<String> {
+pub fn fetch_chunk(num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<String> {
     let upper_limit = array_arimitics();
     let lower_limit = 1;
 
@@ -33,11 +33,10 @@ pub fn fetch_chunk(num: u32, errors: ErrorArray) -> uf<String> {
         _ => num,
     };
 
-    return fetch_chunk_by_number(map_num, errors);
+    return fetch_chunk_by_number(map_num, errors, warnings);
 }
 
-fn fetch_chunk_by_number(map_num: u32, errors: ErrorArray) -> uf<String> {
-    let warnings = WarningArray::new_container();
+fn fetch_chunk_by_number(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> uf<String> {
     let system_paths: SystemPaths = SystemPaths::new();
     let map_path: PathType =
         PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
@@ -77,6 +76,7 @@ fn read_map_data(map_path: &PathType, mut errors: ErrorArray) -> uf<String> {
         Err(e) => {
             let _ = append_log(unsafe { PROGNAME }, &e.to_string(), errors.clone());
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(SE::OpeningFile, format!("Failed to open: {}", map_path)));
             return uf::new(Err(errors));
         }
     };
@@ -87,6 +87,7 @@ fn read_map_data(map_path: &PathType, mut errors: ErrorArray) -> uf<String> {
         Ok(_) => (),
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("Could not read map data to buffer")));
             return uf::new(Err(errors));
         }
     };
@@ -99,6 +100,7 @@ fn parse_map_data(map_data: &str, mut errors: ErrorArray) -> uf<ChunkMap> {
         Ok(d) => return uf::new(Ok(d)),
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
+            errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("Failed to convert map data into json")));
             return uf::new(Err(errors));
         }
     }
@@ -125,7 +127,10 @@ fn verify_map_version(
                                     warning: warnings,
                                 }))
                 },
-                Err(e) => return uf::new(Err(e)),
+                Err(e) => {
+                    e.display(false);
+                    return uf::new(Err(ErrorArray::new_container()))
+                }
             }
         }
     };
@@ -138,12 +143,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap, mut errors: ErrorArray) -> uf<Str
     let mut buffer: Vec<u8> = vec![0; CHUNK_SIZE as usize];
 
     let mut _chunk = String::new(); // TODO make an array or something for this val
-    let mut file = match OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .append(false)
-        .open(system_paths.SYSTEM_ARRAY_LOCATION)
-    {
+    let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION){
         Ok(d) => d,
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
@@ -165,6 +165,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap, mut errors: ErrorArray) -> uf<Str
             Ok(d) => d,
             Err(e) => {
                 errors.push(ErrorArrayItem::from(e));
+                errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("Failed to set read head")));
                 return uf::new(Err(errors));
             }
         };
@@ -175,6 +176,7 @@ fn read_chunk_data(pretty_map_data: &ChunkMap, mut errors: ErrorArray) -> uf<Str
                 break;
             }
             Err(e) => {
+                errors.push(ErrorArrayItem::new(SE::ReadingFile, String::from("couldn't read data from array file")));
                 errors.push(ErrorArrayItem::from(e));
                 return uf::new(Err(errors));
             }

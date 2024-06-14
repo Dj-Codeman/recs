@@ -98,9 +98,14 @@ pub fn encrypt(
         }
     };
 
+    println!("SAFE DERIVED KEY: {}", safe_derive_key);
+
     // creating hmac
     let hmac = match create_hmac(&cipherdata, &safe_derive_key, errors.clone()).uf_unwrap() {
-        Ok(d) => d,
+        Ok(d) => {
+            println!("Generated hmac {}", d);
+            d
+        },
         Err(e) => return uf::new(Err(e)),
     };
 
@@ -129,15 +134,22 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
 
     // removed the hmac from the cipher string to generate the new hmac
     let cipherdata_hmacless: &str = truncate(&cipherdata, cipherdata_len);
+    println!("Payload without hmac: {}", cipherdata_hmacless);
+    println!("KEY USED FOR DECRYPT: {}", key);
 
     // getting old and new hmac values
     let old_hmac: String = cipherdata
         .substring(cipherdata_len, cipherdata_len + 64)
         .to_owned();
+
+    println!("hmac to validate againts {}", old_hmac);
+
     let new_hmac: String = match create_hmac(cipherdata_hmacless, key, errors.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
+
+    println!("{}\n{}", old_hmac, new_hmac);
 
     // verifing hmac
     match old_hmac == new_hmac {
