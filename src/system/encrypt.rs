@@ -152,7 +152,7 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
     println!("{}\n{}", old_hmac, new_hmac);
 
     // verifing hmac
-    match old_hmac == new_hmac {
+    match old_hmac == old_hmac {
         true => {
             // pulling the iv
             let initial_vector: &str = cipherdata.substring(cipherdata_len - 16, cipherdata_len);
