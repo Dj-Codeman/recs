@@ -3,10 +3,10 @@ use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::encode;
 use hmac::{Hmac, Mac};
 use logging::append_log;
-use pretty::warn;
+use pretty::{notice, warn};
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
-use std::str;
+use std::{fmt::format, str};
 use substring::Substring;
 use system::{
     errors::{ErrorArray, ErrorArrayItem, Errors as SE, UnifiedResult as uf},
@@ -100,6 +100,7 @@ pub fn encrypt(
 
     println!("SAFE DERIVED KEY: {}", safe_derive_key);
 
+    notice(&format!("ciperdata: {}, key: {}", &cipherdata, &safe_derive_key));
     // creating hmac
     let hmac = match create_hmac(&cipherdata, &safe_derive_key, errors.clone()).uf_unwrap() {
         Ok(d) => {
@@ -144,6 +145,7 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
 
     println!("hmac to validate againts {}", old_hmac);
 
+    notice(&format!("ciperdata: {}, key: {}", &cipherdata, &key));
     let new_hmac: String = match create_hmac(cipherdata_hmacless, key, errors.clone()).uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
@@ -152,7 +154,7 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
     println!("{}\n{}", old_hmac, new_hmac);
 
     // verifing hmac
-    match old_hmac == old_hmac {
+    match old_hmac == new_hmac {
         true => {
             // pulling the iv
             let initial_vector: &str = cipherdata.substring(cipherdata_len - 16, cipherdata_len);
