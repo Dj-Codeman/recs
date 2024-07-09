@@ -1,17 +1,13 @@
-use logging::append_log;
 use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
 use system::{
+    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
     functions::{make_dir, path_present},
     types::PathType,
 };
 
 use crate::{
-    array::{generate_system_array, index_system_array},
-    auth::generate_user_key,
-    config::STREAMING_BUFFER_SIZE,
-    errors::RecsRecivedErrors,
-    PROGNAME,
+    array::{generate_system_array, index_system_array}, auth::generate_user_key, config::STREAMING_BUFFER_SIZE, log::log, PROGNAME
 };
 
 // Static stuff
@@ -47,42 +43,37 @@ impl SystemPaths {
     }
 }
 
-// !  enviornment as in program
+// !  environment as in program
 
-pub fn set_system(debug: bool) -> Result<(), RecsRecivedErrors> {
+pub fn set_system(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
     // This functions is responsible for creating the dir tree,
-    // It also monitors the output of the functions that create keys and indexs for them
-    match make_folders(debug) {
-        Ok(_) => (),
-        Err(e) => return Err(e),
-    };
+    // It also monitors the output of the functions that create keys and index for them
+    if let Err(err) = make_folders(debug, errors.clone()).uf_unwrap() {
+        return uf::new(Err(err))
+    }
 
-    match generate_system_array() {
-        Ok(_) => {
-            let _ = match index_system_array() {
-                Ok(_) => append_log(
-                    unsafe { &PROGNAME },
-                    "System array has been created and indexed",
-                ),
+    if let Err(e) = generate_system_array(errors.clone()) {
+        return uf::new(Err(e));
+    }
+    
+    if let Err(e) = index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
+        return uf::new(Err(e));
+    }
+    
+    log("System array has been created and indexed".to_string());
 
-                Err(e) => return Err(e),
-            };
-        }
-        Err(e) => return Err(e),
-    };
-
-    match generate_user_key(debug) {
-        Ok(_) => Ok(()),
-        Err(e) => return Err(e),
+    match generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
+        Ok(_) => uf::new(Ok(())),
+        Err(e) => return uf::new(Err(e)),
     }
 }
 
 // ! enviornment as in file paths
-fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
+fn make_folders(debug: bool, mut errors: ErrorArray) -> uf<()> {
     // * Verifing path exists and creating missing ones
     let system_paths: SystemPaths = SystemPaths::new();
 
-    match path_present(&system_paths.SYSTEM_PATH) {
+    match path_present(&system_paths.SYSTEM_PATH, errors.clone()).uf_unwrap() {
         Ok(b) => match b {
             true => {
                 // we're ok to populate folder tree
@@ -92,31 +83,26 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
                 paths.insert(2, system_paths.META.clone());
 
                 for path in paths.iter() {
-                    let _ = match make_dir(path.clone()) {
+                    let _ = match make_dir(&path, errors.clone()).uf_unwrap() {
                         Ok(_) => match debug {
-                            true => append_log(
-                                unsafe { &PROGNAME },
-                                &format!("Path : {} created", &path),
-                            ),
-                            false => Ok(()),
+                            true => log(format!("Path : {} created", &path)),
+                            false => (),
                         },
-                        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+                        Err(e) => return uf::new(Err(e)),
                     };
                 }
             }
             false => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    system::errors::SystemErrorType::ErrorCreatingFile,
-                    "SYSTEM_PATH is missing",
-                )))
+                errors.push(ErrorArrayItem::new(Errors::GeneralError, String::from("System Path missing")));
+                return uf::new(Err(errors))
             }
         },
-        Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
+        Err(e) => return uf::new(Err(e)),
     }
-    Ok(())
+    uf::new(Ok(()))
 }
 
-// ! enviornment as in system
+// ! environment as in system
 // not needed for small text string it passwords
 // dep at some point
 pub fn calc_buffer() -> usize {

@@ -239,12 +239,12 @@ pub fn write(
                                 Err(e) => return uf::new(Err(e)),
                             },
                             fixed_key,
-                        ) {
+                            errors.clone()
+                        ).uf_unwrap() {
                             // TODO ^ Simplify this. It is I/o intensive needed multiple files calls multiple times a second
                             Ok(d) => d.into(),
                             Err(e) => {
-                                errors.push(e);
-                                return uf::new(Err(errors));
+                                return uf::new(Err(e));
                             }
                         },
                         buffer_size,
@@ -354,13 +354,12 @@ pub fn write(
         };
 
         // Create the writing key
-        let key_result = create_writing_key(chunk, fixed_key);
+        let key_result = create_writing_key(chunk, fixed_key, errors.clone());
 
-        let key_data: String = match key_result {
+        let key_data: String = match key_result.uf_unwrap() {
             Ok(d) => d,
             Err(e) => {
-                errors.push(e);
-                return uf::new(Err(errors));
+                return uf::new(Err(e));
             }
         };
 
@@ -725,11 +724,10 @@ pub fn read(
         };
 
         // Generate the writing key for the file
-        let writing_key: String = match create_writing_key(chunk, fixed_key) {
+        let writing_key: String = match create_writing_key(chunk, fixed_key, errors.clone()).uf_unwrap() {
             Ok(d) => d,
             Err(e) => {
-                errors.push(e);
-                return uf::new(Err(errors));
+                return uf::new(Err(e));
             }
         };
 

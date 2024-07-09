@@ -12,6 +12,9 @@
         "ciphertext",
         "paddingcount",
         "PROGNAME",
-        "unistd"
+        "sysinfo",
+        "unistd",
+        "userdata",
+        "userkey"
     ]
 }

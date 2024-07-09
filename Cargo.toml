@@ -1,6 +1,6 @@
 [package]
 name = "recs"
-version = "1.9.9"
+version = "2.5.1"
 edition = "2021"
 authors = ["Darrion <dwhitfield@ramfield.net>"]
 
