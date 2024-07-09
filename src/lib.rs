@@ -11,13 +11,15 @@ mod encrypt;
 pub mod errors;
 #[path = "enviornment.rs"]
 mod local_env;
+#[path = "system/log.rs"]
+mod log;
 #[path = "system/secrets.rs"]
 mod secret;
 use errors::RecsRecivedErrors;
 use local_env::VERSION;
 use logging::append_log;
 use secret::{read_raw, write_raw};
-use system::{create_hash, del_file, path_present, ClonePath, PathType};
+use system::{errors::ErrorArray, functions::path_present};
 
 use std::{
     fs::{File, OpenOptions},
@@ -47,13 +49,13 @@ pub fn set_debug(option: bool) {
     }
 }
 
-/// This function handels setting the PROGNAME variables
+/// This function handles setting the PROGNAME variables
 pub fn set_prog(data: &'static str) {
     unsafe { PROGNAME = data };
 }
 
 /// Initialize checks the progname, and debugging values snf ensure the lib is ready to function
-pub fn initialize() -> Result<(), RecsRecivedErrors> {
+pub fn initialize(mut errors: ErrorArray) -> Result<(), RecsRecivedErrors> {
     let debugging: bool = match unsafe { DEBUGGING } {
         Some(d) => match d {
             true => true,
@@ -71,10 +73,11 @@ pub fn initialize() -> Result<(), RecsRecivedErrors> {
         false => false,
     };
 
-    match append_log(unsafe { &PROGNAME }, "RECS STARTED") {
-        Ok(_) => (),
-        Err(e) => return Err(RecsRecivedErrors::repack(e)),
-    };
+    if let Err(e) = append_log(unsafe { &PROGNAME }, "RECS STARTED", errors.clone()).uf_unwrap() {
+        e.display(false)
+    }
+
+    if let Err(e) = ensure_system_path(unsafe { &PROGNAME }, debug) {}
 
     match ensure_system_path(unsafe { &PROGNAME }, debug) {
         Ok(_) => (),
@@ -91,7 +94,9 @@ pub fn initialize() -> Result<(), RecsRecivedErrors> {
 
 fn ensure_system_path(prog: &str, debug: bool) -> Result<(), RecsRecivedErrors> {
     let system_paths: SystemPaths = SystemPaths::new();
-    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION).map_err(|e| RecsRecivedErrors::SystemError(e))? {
+    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION)
+        .map_err(|e| RecsRecivedErrors::SystemError(e))?
+    {
         true => (), // Nothing needs to be done the lib with this name has  already been initialized
         false => {
             match append_log(
@@ -187,7 +192,8 @@ pub fn update_map(map_num: u32) -> bool {
     let system_paths: SystemPaths = SystemPaths::new();
     // Add a result to return errors from this
     // ? Getting the current map data
-    let map_path: PathType = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
+    let map_path: PathType =
+        PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
 
     // ? Reading the map
     let mut map_file = File::open(&map_path).expect("File could not be opened");
@@ -242,7 +248,7 @@ pub fn update_map(map_num: u32) -> bool {
         .expect("File could not written to");
 
     if let Err(_e) = writeln!(map_file, "{}", updated_map) {
-        eprintln!("An error occoured");
+        eprintln!("An error occurred");
         let _ = append_log(unsafe { &PROGNAME }, "Could save map data to file");
     };
 
@@ -258,7 +264,7 @@ fn ping_check() {
 // Debugging and tooling
 
 pub fn check_map(map_num: u32) -> bool {
-    // needs to fail gracefuly
+    // needs to fail graceful
     match fetch_chunk(map_num) {
         Ok(_) => true,
         Err(_) => false,

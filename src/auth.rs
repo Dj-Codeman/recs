@@ -9,7 +9,11 @@ use std::{
     io::Write,
     str,
 };
-use system::{create_hash, del_file, errors::SystemError, path_present, ClonePath, PathType};
+use system::{
+    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf},
+    functions::{create_hash, del_file, path_present},
+    types::PathType,
+};
 
 use crate::{
     array::array_arimitics,
@@ -35,7 +39,7 @@ pub struct KeyIndex {
 }
 
 // ! KEY GENERATION SECTION
-pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
+pub fn generate_user_key(debug: bool, mut errors: ErrorArray) -> uf<()> {
     // This function generates to key we use to encrypt data
     // The key is not actually stored but a value is encrypted with
     // A generated key and saved. At decryption time the key is checked against
@@ -80,10 +84,11 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     // * creating the integrity file
 
     let secret: String = "The hotdog man isn't real !?".to_string();
-    let cipher_integrity: String = match encrypt(secret.into(), userkey.into(), 1024) {
-        Ok(d) => d,
-        Err(e) => return Err(e),
-    };
+    let cipher_integrity: String =
+        match encrypt(secret.into(), userkey.into(), 1024, errors.clone()) {
+            Ok(d) => d,
+            Err(e) => return Err(e),
+        };
 
     let system_paths: SystemPaths = SystemPaths::new();
 
@@ -93,8 +98,14 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
                 true => {
                     match del_file(system_paths.USER_KEY_LOCATION.clone_path()) {
                         Ok(_) => {
-                            notice(&format!("{}: deleted", system_paths.USER_KEY_LOCATION.to_string()));
-                            let _ = append_log(unsafe { &PROGNAME }, "The old userkey has been deleted");
+                            notice(&format!(
+                                "{}: deleted",
+                                system_paths.USER_KEY_LOCATION.to_string()
+                            ));
+                            let _ = append_log(
+                                unsafe { &PROGNAME },
+                                "The old userkey has been deleted",
+                            );
                         }
                         Err(e) => return Err(RecsRecivedErrors::SystemError(e)),
                     };
@@ -176,7 +187,8 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     let pretty_userkey_map: String = serde_json::to_string_pretty(&userkey_map_data).unwrap();
 
     // creating the json path
-    let userkey_map_path: PathType = PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
+    let userkey_map_path: PathType =
+        PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
 
     // Deleting and recreating the json file
     let _ = match del_file(userkey_map_path.clone_path()) {
@@ -226,35 +238,32 @@ pub fn generate_user_key(debug: bool) -> Result<(), RecsRecivedErrors> {
     };
 }
 
-pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
+pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
     let system_paths: SystemPaths = SystemPaths::new();
-    let _ = append_log(
-        unsafe { &PROGNAME },
-        "user key authentication request started",
-    );
+    // let _ = append_log(
+    //     unsafe { &PROGNAME },
+    //     "user key authentication request started",
+    // );
 
     let salt: String = match fetch_chunk_helper(1) {
         Ok(d) => d,
-        Err(e) => return Err(e),
+        Err(e) => return Err(ErrorArrayItem::from(e)),
     };
     let secret: String = match fetch_chunk_helper(array_arimitics() - 1) {
         Ok(d) => d,
-        Err(e) => return Err(e),
+        Err(e) => return Err(ErrorArrayItem::from(e)),
     };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
-        Err(_) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidTypeGiven,
-            )))
-        }
+        Err(e) => return Err(ErrorArrayItem::from(e)),
     };
     let iteration = match std::num::NonZeroU32::new(num) {
         Some(d) => d,
         None => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidTypeGiven,
-            )))
+            return Err(ErrorArrayItem::new(
+                Errors::InvalidType,
+                "Error converting int".to_string(),
+            ))
         }
     };
     let mut password_key = [0; 16]; // Setting the key size
@@ -272,15 +281,15 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
     // ! make the read the userkey from the map in the future
     let verification_ciphertext: String = match read_to_string(&system_paths.USER_KEY_LOCATION) {
         Ok(d) => d,
-        Err(e) => {
-            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                system::errors::SystemErrorType::ErrorReadingFile,
-                &e.to_string(),
-            )))
-        }
+        Err(e) => return Err(ErrorArrayItem::from(e)),
     };
 
-    let verification_result: String = match decrypt(&verification_ciphertext.to_string(), &userkey)
+    let verification_result: String = match decrypt(
+        &verification_ciphertext.to_string(),
+        &userkey,
+        errors.clone(),
+    )
+    .uf_unwrap()
     {
         Ok(d) => String::from_utf8_lossy(&d).to_string(),
         Err(e) => return Err(e),
@@ -303,7 +312,7 @@ pub fn auth_user_key() -> Result<String, RecsRecivedErrors> {
 
 // todo change these security goals for multi system things
 
-pub fn create_writing_key(key: String, fixed_key: bool) -> Result<String, RecsRecivedErrors> {
+pub fn create_writing_key(key: String, fixed_key: bool) -> Result<String, ErrorArrayItem> {
     // golang compatible ????
     let mut prekey_str: String = String::new();
 
@@ -324,20 +333,19 @@ pub fn create_writing_key(key: String, fixed_key: bool) -> Result<String, RecsRe
         Ok(d) => d,
         Err(e) => return Err(e),
     };
+
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
-        Err(_) => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidTypeGiven,
-            )))
-        }
+        Err(e) => return Err(ErrorArrayItem::from(e)),
     };
+
     let iteration = match std::num::NonZeroU32::new(num) {
         Some(d) => d,
         None => {
-            return Err(RecsRecivedErrors::RecsError(RecsError::new(
-                RecsErrorType::InvalidTypeGiven,
-            )))
+            return Err(ErrorArrayItem::new(
+                Errors::InvalidSignature,
+                "Error converting int while creating writing key".to_string(),
+            ))
         }
     };
     let mut final_key = [0; 16];
@@ -354,11 +362,11 @@ pub fn create_writing_key(key: String, fixed_key: bool) -> Result<String, RecsRe
 }
 
 // * helper funtion for fetching chunks
-fn fetch_chunk_helper(num: u32) -> Result<String, RecsRecivedErrors> {
-    let chunk_data: String = match fetch_chunk(num) {
+fn fetch_chunk_helper(num: u32, mut errors: ErrorArray) -> uf<String> {
+    let chunk_data: String = match fetch_chunk(num, &mut errors) {
         Ok(d) => d,
-        Err(e) => return Err(e),
+        Err(e) => return uf::new(Err(e)),
     };
 
-    Ok(chunk_data)
+    uf::new(Ok(chunk_data))
 }

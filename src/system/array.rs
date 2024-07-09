@@ -1,18 +1,17 @@
-use logging::{append_log, errors::MyErrors};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
     io::{prelude::*, SeekFrom, Write},
     str,
 };
-use system::{create_hash, del_dir, del_file, errors::SystemError, path_present, ClonePath, PathType};
+use system::{
+    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
+    functions::{create_hash, del_dir, del_file, path_present},
+    types::PathType,
+};
 
 use crate::{
-    config::{ARRAY_LEN, CHUNK_SIZE},
-    encrypt::create_secure_chunk,
-    errors::{RecsError, RecsErrorType, RecsRecivedErrors},
-    local_env::{SystemPaths, VERSION},
-    PROGNAME,
+    config::{ARRAY_LEN, CHUNK_SIZE}, encrypt::create_secure_chunk, local_env::{SystemPaths, VERSION}, log::log
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -37,34 +36,31 @@ pub fn array_arimitics() -> u32 {
     return total_chunks;
 }
 
-pub fn generate_system_array() -> Result<bool, RecsRecivedErrors> {
+pub fn generate_system_array(errors: ErrorArray) -> Result<(), ErrorArray> {
     let system_paths: SystemPaths = SystemPaths::new();
-    match append_log(unsafe { &PROGNAME }, "Creating system array") {
-        Ok(_) => (),
-        Err(e) => return Err(RecsRecivedErrors::repack(e)),
-    };
+
+    // Attempt to log an initial message
+    log("Generating system array".to_string());
 
     // Remove the existing system array directory
-    let _ = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION);
+    if let Err(err) = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
+        err.display(false);
+    };
 
     // Create the system array contents
     let system_array_contents = create_system_array_contents();
 
     // Write the system array contents to the file
-    match write_system_array_to_file(&system_array_contents) {
+    match write_system_array_to_file(&system_array_contents, errors.clone()).uf_unwrap() {
         Ok(_) => {
-            match append_log(unsafe { &PROGNAME }, "Created system array") {
-                Ok(_) => (),
-                Err(e) => return Err(RecsRecivedErrors::repack(e)),
-            };
-            return Ok(true);
-        }
-        Err(e) => {
-            let _ = append_log(
-                unsafe { &PROGNAME },
-                &format!("Could not write the system_array to the path specified: "),
-            );
-            return Err(e);
+            // Log success message if writing to file succeeds
+            log("System array file created".to_string());
+            Ok(())
+        },
+        Err(errors) => {
+            // Log error if writing to file fails and return accumulated errors
+            log("Errors happened while creating the system array file".to_string());
+            Err(errors)
         }
     }
 }
@@ -82,35 +78,38 @@ fn create_system_array_contents() -> String {
     )
 }
 
-fn write_system_array_to_file(contents: &str) -> Result<(), RecsRecivedErrors> {
+pub fn write_system_array_to_file(contents: &str, mut errors: ErrorArray) -> uf<()> {
     let system_paths: SystemPaths = SystemPaths::new();
-    let mut system_array_file = OpenOptions::new()
+
+    // Attempt to open the file
+    let system_array_file_result = OpenOptions::new()
         .create_new(true)
         .write(true)
         .append(true)
         .open(system_paths.SYSTEM_ARRAY_LOCATION.to_owned())
         .map_err(|e| {
-            let _ = append_log(unsafe { &PROGNAME }, &e.to_string());
-            RecsRecivedErrors::SystemError(SystemError::new_details(
-                system::errors::SystemErrorType::ErrorCreatingFile,
-                &e.to_string(),
-            ))
-        })?;
+            log("Error opening system array file".to_string());
+            errors.push(ErrorArrayItem::new(Errors::OpeningFile, e.to_string()));
+            errors.clone()
+        });
 
-    write!(system_array_file, "{}", contents).map_err(|e| {
-        let _ = append_log(unsafe { &PROGNAME }, &e.to_string());
-        RecsRecivedErrors::SystemError(SystemError::new_details(
-            system::errors::SystemErrorType::ErrorCreatingFile,
-            &e.to_string(),
-        ))
-    })?;
-
-    Ok(())
+    match system_array_file_result {
+        Ok(mut system_array_file) => {
+            if let Err(e) = write!(system_array_file, "{}", contents) {
+                log("Error while writing to the system array file".to_string());
+                errors.push(ErrorArrayItem::new(Errors::CreatingFile, e.to_string()));
+                return uf::new(Err(errors));
+            } else {
+                return uf::new(Ok(()));
+            }
+        }
+        Err(e) => uf::new(Err(e)),
+    }
 }
 
 // indexing the created array
 
-pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
+pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<bool> {
     let mut chunk_number: u32 = 1;
     let mut range_start: u32 = BEG_CHAR;
     let mut range_end: u32 = BEG_CHAR + CHUNK_SIZE as u32;
@@ -121,18 +120,16 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
     let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION.to_string()) {
         Ok(d) => d,
         Err(e) => {
-            return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                system::errors::SystemErrorType::ErrorOpeningFile,
-                &e.to_string(),
-            )))
+            errors.push(ErrorArrayItem::from(e));
+            return uf::new(Err(errors));
         }
     };
 
     if (range_end - range_start) < CHUNK_SIZE as u32 {
-        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-            RecsErrorType::SecretArrayError,
-            "Invalid secret chunk length",
-        )));
+        let err_item =
+            ErrorArrayItem::new(Errors::GeneralError, "Invalid chunk legnth".to_string());
+        errors.push(err_item);
+        return uf::new(Err(errors));
     }
 
     loop {
@@ -143,10 +140,8 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
         match file.seek(SeekFrom::Start(range_start as u64)) {
             Ok(d) => d,
             Err(e) => {
-                return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                    system::errors::SystemErrorType::ErrorReadingFile,
-                    &format!("Failed to set seek head: {}", e.to_string()),
-                )))
+                errors.push(ErrorArrayItem::from(e));
+                return uf::new(Err(errors));
             }
         };
 
@@ -157,7 +152,7 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                 let chunk_hash = create_hash(chunk);
 
                 let chunk_map = ChunkMap {
-                    location: system_paths.SYSTEM_ARRAY_LOCATION.clone_path(),
+                    location: system_paths.SYSTEM_ARRAY_LOCATION.clone(),
                     version: VERSION.to_string(),
                     chunk_hsh: chunk_hash.to_string(),
                     chunk_num: chunk_number,
@@ -165,22 +160,23 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                     chunk_end: range_end,
                 };
 
-                let chunk_map_path: PathType = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
+                let chunk_map_path: PathType =
+                    PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
 
-                if path_present(&chunk_map_path).map_err(|e| RecsRecivedErrors::SystemError(e))? {
-                    match del_file(chunk_map_path.clone_path()) {
+                if path_present(&chunk_map_path, errors.clone()).unwrap() {
+                    match del_file(chunk_map_path.clone(), errors.clone(), warnings.clone())
+                        .uf_unwrap()
+                    {
                         Ok(_) => (),
-                        Err(e) => return Err(RecsRecivedErrors::repack(MyErrors::SystemError(e))),
+                        Err(e) => return uf::new(Err(e)),
                     };
                 }
 
                 let pretty_chunk_map = match serde_json::to_string_pretty(&chunk_map) {
                     Ok(d) => d,
                     Err(e) => {
-                        return Err(RecsRecivedErrors::RecsError(RecsError::new_details(
-                            RecsErrorType::JsonCreationError,
-                            &e.to_string(),
-                        )))
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
                     }
                 };
 
@@ -192,26 +188,18 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
                 {
                     Ok(d) => d,
                     Err(e) => {
-                        return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                            system::errors::SystemErrorType::ErrorOpeningFile,
-                            &e.to_string(),
-                        )))
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
                     }
                 };
 
                 match write!(chunk_map_file, "{}", pretty_chunk_map) {
-                    Ok(_) => match append_log(
-                        unsafe { &PROGNAME },
-                        &format!("The map file {} has been created", &chunk_map_path),
-                    ) {
-                        Ok(_) => (),
-                        Err(e) => return Err(RecsRecivedErrors::repack(e)),
-                    },
+                    Ok(_) => {
+                        log("No Cipher Data received".to_string());
+                    }
                     Err(e) => {
-                        return Err(RecsRecivedErrors::SystemError(SystemError::new_details(
-                            system::errors::SystemErrorType::ErrorOpeningFile,
-                            &e.to_string(),
-                        )))
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
                     }
                 };
             }
@@ -224,11 +212,9 @@ pub fn index_system_array() -> Result<bool, RecsRecivedErrors> {
         range_end += CHUNK_SIZE as u32;
     }
 
-    match append_log(unsafe { &PROGNAME }, "Indexed system array !") {
-        Ok(_) => (),
-        Err(e) => return Err(RecsRecivedErrors::repack(e)),
-    };
-    Ok(true)
+    log("No Cipher Data received".to_string());
+
+    uf::new(Ok(true))
 }
 
 #[cfg(test)]

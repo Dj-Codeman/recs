@@ -1,7 +1,10 @@
 use logging::append_log;
 use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
-use system::{errors::SystemError, make_dir, path_present, ClonePath, PathType}; // for finding free ram for vectors
+use system::{
+    functions::{make_dir, path_present},
+    types::PathType,
+};
 
 use crate::{
     array::{generate_system_array, index_system_array},
@@ -12,7 +15,8 @@ use crate::{
 };
 
 // Static stuff
-pub const VERSION: &str = "R1.0.2"; // make this cooler in the future
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[allow(non_snake_case)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemPaths {
@@ -33,12 +37,12 @@ impl SystemPaths {
         // /// This file is used in conjunction with \'USER_KEY_LOCATION\' to create the keys used for encrypting files
         // /// This is used to verify the string the system uses to derive keys from, without this file all data is ILLEGIBLE
         SystemPaths {
-            SYSTEM_PATH: system_p.clone_path(),
-            DATA: PathType::Content(format!("{}/secrets", system_p.clone_path())),
-            MAPS: PathType::Content(format!("{}/maps", system_p.clone_path())),
-            META: PathType::Content(format!("{}/meta", system_p.clone_path())),
-            SYSTEM_ARRAY_LOCATION: PathType::Content(format!("{}/array.recs", system_p.clone_path())),
-            USER_KEY_LOCATION: PathType::Content(format!("{}/userdata.recs", system_p.clone_path())),
+            SYSTEM_PATH: system_p.clone(),
+            DATA: PathType::Content(format!("{}/secrets", system_p.clone())),
+            MAPS: PathType::Content(format!("{}/maps", system_p.clone())),
+            META: PathType::Content(format!("{}/meta", system_p.clone())),
+            SYSTEM_ARRAY_LOCATION: PathType::Content(format!("{}/array.recs", system_p.clone())),
+            USER_KEY_LOCATION: PathType::Content(format!("{}/userdata.recs", system_p.clone())),
         }
     }
 }
@@ -86,13 +90,14 @@ fn make_folders(debug: bool) -> Result<(), RecsRecivedErrors> {
                 paths.insert(0, system_paths.DATA.clone());
                 paths.insert(1, system_paths.MAPS.clone());
                 paths.insert(2, system_paths.META.clone());
-    
+
                 for path in paths.iter() {
-                    let _ = match make_dir(path.clone_path()) {
+                    let _ = match make_dir(path.clone()) {
                         Ok(_) => match debug {
-                            true => {
-                                append_log(unsafe { &PROGNAME }, &format!("Path : {} created", &path))
-                            }
+                            true => append_log(
+                                unsafe { &PROGNAME },
+                                &format!("Path : {} created", &path),
+                            ),
                             false => Ok(()),
                         },
                         Err(e) => return Err(RecsRecivedErrors::SystemError(e)),

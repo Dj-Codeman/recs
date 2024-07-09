@@ -6,5 +6,12 @@
         "./Cargo.toml",
         "./Cargo.toml",
         "./Cargo.toml"
+    ],
+    "cSpell.words": [
+        "canonicalize",
+        "ciphertext",
+        "paddingcount",
+        "PROGNAME",
+        "unistd"
     ]
 }
