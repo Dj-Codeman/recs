@@ -153,11 +153,11 @@ fn ensure_max_map_exists(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
     match path_present(&max_map_path, errors.clone()).uf_unwrap() {
         Ok(true) => uf::new(Ok(())),
         Ok(false) => {
-            if let Ok(true) = index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
-                uf::new(Ok(()))
-            } else {
-                unreachable!() // The function never returns ok(false)
+            match index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
+                Ok(_d) => uf::new(Ok(())),
+                Err(e) => return uf::new(Err(e)),
             }
+
         }
         Err(e) => uf::new(Err(e)),
     }
