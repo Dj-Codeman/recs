@@ -124,7 +124,7 @@ pub fn encrypt(
 
 pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8>> {
     // Calculate the length of cipherdata minus the HMAC
-    let cipherdata_len: usize = cipherdata.len() - 63;
+    let cipherdata_len: usize = cipherdata.len() - 64;
 
     // Remove the HMAC from the cipherdata
     let cipherdata_hmacless: &str = truncate(&cipherdata, cipherdata_len);
