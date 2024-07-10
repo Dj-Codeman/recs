@@ -809,7 +809,7 @@ pub fn read(
                     };
 
                     // take the first spliiting chunk into signature and cipher data
-                    let encoded_signature: &str = truncate(&secret_buffer, 62); // 61 + how ever big the chunk count is
+                    let encoded_signature: &str = truncate(&secret_buffer, 63); // 61 + how ever big the chunk count is
                     let cipher_buffer: &str = &secret_buffer[62..];
 
                     // * decrypting the chunk
