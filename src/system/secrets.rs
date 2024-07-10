@@ -543,7 +543,7 @@ pub fn read_raw(
             // take the first splinting chunk into signature and cipher data
             let encoded_signature: &str = truncate(&secret_buffer, 62);
             // ! When this inevitably fails, Remember the paddingcount() changes the sig length.
-            let cipher_buffer: &str = &secret_buffer[63..]; // * this is the encrypted hex encoded bytes
+            let cipher_buffer: &str = &secret_buffer[62..]; // * this is the encrypted hex encoded bytes
 
             // * decrypting the chunk
             let mut decrypted_data: Vec<u8> =
