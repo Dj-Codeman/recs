@@ -59,13 +59,14 @@ pub fn set_system(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf
     if let Err(e) = index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
         return uf::new(Err(e));
     }
+
+    if let Err(e) = generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
+        return uf::new(Err(e))
+    }
     
     log("System array has been created and indexed".to_string());
 
-    match generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
-        Ok(_) => uf::new(Ok(())),
-        Err(e) => return uf::new(Err(e)),
-    }
+    uf::new(Ok(()))
 }
 
 // ! enviornment as in file paths

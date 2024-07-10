@@ -93,44 +93,26 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
     let system_paths: SystemPaths = SystemPaths::new();
 
     match path_present(&system_paths.USER_KEY_LOCATION, errors.clone()).uf_unwrap() {
-        Ok(d) => match d {
-            true => match debug {
-                true => {
-                    match del_file(
-                        system_paths.USER_KEY_LOCATION.clone(),
-                        errors.clone(),
-                        warnings.clone(),
-                    )
-                    .uf_unwrap()
-                    {
-                        Ok(_) => {
-                            log("The old userkey has been deleted".to_string());
-                        }
-                        Err(e) => return uf::new(Err(e)),
-                    };
-                }
-                false => {
-                    if let Err(err) = del_file(
-                        system_paths.USER_KEY_LOCATION.clone(),
-                        errors.clone(),
-                        warnings.clone(),
-                    )
-                    .uf_unwrap()
-                    {
-                        return uf::new(Err(err));
+        Ok(true) => {
+            let result = del_file(
+                system_paths.USER_KEY_LOCATION.clone(),
+                errors.clone(),
+                warnings.clone(),
+            ).uf_unwrap();
+    
+            match result {
+                Ok(_) => {
+                    if debug {
+                        log("The old userkey has been deleted".to_string());
                     }
                 }
-            },
-            false => {
-                errors.push(ErrorArrayItem::new(
-                    Errors::DeletingFile,
-                    (&system_paths.USER_KEY_LOCATION.to_owned()).to_string(),
-                ));
-                return uf::new(Err(errors));
+                Err(e) => return uf::new(Err(e)),
             }
-        },
+        }
+        Ok(false) => (),
         Err(e) => return uf::new(Err(e)),
     }
+    
 
     // creating the master.json file
     let mut userkey_file = match OpenOptions::new()
