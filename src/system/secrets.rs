@@ -1,6 +1,6 @@
 use hex::encode;
 use nix::unistd::{chown, Uid};
-use pretty::warn;
+use pretty::{dump, warn};
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -542,6 +542,7 @@ pub fn read_raw(
 
             // take the first splinting chunk into signature and cipher data
             let encoded_signature: &str = truncate(&secret_buffer, 62);
+            dump(encoded_signature);
             // ! When this inevitably fails, Remember the paddingcount() changes the sig length.
             let cipher_buffer: &str = &secret_buffer[62..]; // * this is the encrypted hex encoded bytes
 
