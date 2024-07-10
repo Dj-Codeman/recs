@@ -1050,11 +1050,12 @@ fn verify_signature(
         ));
     };
 
+    // TODO change the parsing to read the actual number from the signature
     let sig_count = match signature[31..].parse::<usize>() {
         Ok(d) => d,
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+            01
         }
     };
 
