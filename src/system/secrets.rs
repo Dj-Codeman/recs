@@ -542,7 +542,6 @@ pub fn read_raw(
 
             // take the first splinting chunk into signature and cipher data
             let encoded_signature: &str = truncate(&secret_buffer, 62);
-            dump(encoded_signature);
             // ! When this inevitably fails, Remember the paddingcount() changes the sig length.
             let cipher_buffer: &str = &secret_buffer[62..]; // * this is the encrypted hex encoded bytes
 
@@ -558,22 +557,22 @@ pub fn read_raw(
             // * handling decoding the signature
             // ? This mess decodes the vec array into a hex encoded string, then reads that into a normal &string
 
-            let signature_utf8: Result<String, std::string::FromUtf8Error> =
-                String::from_utf8(match hex::decode(encoded_signature) {
-                    Ok(d) => d,
-                    Err(e) => {
-                        errors.push(ErrorArrayItem::from(e));
-                        return uf::new(Err(errors));
+            let signature_data: String = match hex::decode(encoded_signature) {
+                Ok(decoded) => {
+                    match String::from_utf8(decoded) {
+                        Ok(utf8_string) => utf8_string,
+                        Err(e) => {
+                            errors.push(ErrorArrayItem::from(e));
+                            return uf::new(Err(errors));
+                        }
                     }
-                });
-
-            let signature_data: String = match signature_utf8 {
-                Ok(d) => d,
+                },
                 Err(e) => {
                     errors.push(ErrorArrayItem::from(e));
                     return uf::new(Err(errors));
                 }
             };
+            
 
             signature += &signature_data;
 
