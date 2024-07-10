@@ -1,6 +1,5 @@
 use hex::encode;
 use nix::unistd::{chown, Uid};
-use pretty::{dump, warn};
 use rand::distributions::{Distribution, Uniform};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -84,8 +83,6 @@ pub fn write(
     };
 
     log(format!("{} '{}'", "Attempting to encrypt", &filename));
-
-    warn(&filename.to_string());
     let system_paths: SystemPaths = SystemPaths::new();
 
     // testing if the file exists
@@ -528,7 +525,7 @@ pub fn read_raw(
     loop {
         // Setting the pointer and cursors before the read
 
-        // ! handeling the file reading and outputs
+        // ! handling the file reading and outputs
         while range_start < data.len() {
             let chunk: &str = &data[range_start..range_end];
             let secret_buffer: String = match std::str::from_utf8(chunk.as_bytes()) {
@@ -810,7 +807,7 @@ pub fn read(
 
                     // take the first spliiting chunk into signature and cipher data
                     let encoded_signature: &str = truncate(&secret_buffer, 62); // 61 + how ever big the chunk count is
-                    let cipher_buffer: &str = &secret_buffer[63..];
+                    let cipher_buffer: &str = &secret_buffer[62..];
 
                     // * decrypting the chunk
                     let mut decrypted_data: Vec<u8> =
