@@ -809,8 +809,8 @@ pub fn read(
                     };
 
                     // take the first spliiting chunk into signature and cipher data
-                    let encoded_signature: &str = truncate(&secret_buffer, 64); // 61 + how ever big the chunk count is
-                    let cipher_buffer: &str = &secret_buffer[64..];
+                    let encoded_signature: &str = truncate(&secret_buffer, 62); // 61 + how ever big the chunk count is
+                    let cipher_buffer: &str = &secret_buffer[63..];
 
                     // * decrypting the chunk
                     let mut decrypted_data: Vec<u8> =
@@ -1017,7 +1017,7 @@ fn verify_signature(
     mut errors: ErrorArray,
     mut warnings: WarningArray,
 ) -> uf<OkWarning<()>> {
-    let _sig_digit_count = truncate(&signature, 1); // remember it exists
+    let _sig_digit_count = truncate(&signature, 2); // remember it exists
 
     let sig_version = truncate(&signature[3..], 6);
 

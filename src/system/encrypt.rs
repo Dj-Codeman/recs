@@ -2,7 +2,7 @@ use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
-use pretty::dump;
+use pretty::{dump, warn};
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
 use std::str;
@@ -141,6 +141,10 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
             return uf::new(Err(errors));
         }
     };
+
+    warn(&old_hmac);
+    warn(&new_hmac);
+    warn(&cipherdata_hmacless);
 
     // Verify HMAC
     if old_hmac != new_hmac {
