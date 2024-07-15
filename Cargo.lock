@@ -1016,7 +1016,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "recs"
+name = "recs_lib"
 version = "2.5.2"
 dependencies = [
  "aes",

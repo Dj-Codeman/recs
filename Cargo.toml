@@ -1,8 +1,9 @@
 [package]
-name = "recs"
+name = "recs_lib"
 version = "2.5.2"
 edition = "2021"
 authors = ["Darrion <dwhitfield@ramfield.net>"]
+description = "A confusing library for encrypting files and text"
 
 [lib]
 name = "recs"
