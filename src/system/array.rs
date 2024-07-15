@@ -4,7 +4,7 @@ use std::{
     io::{prelude::*, SeekFrom, Write},
     str,
 };
-use system::{
+use dusa_collection_utils::{
     errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
     functions::{create_hash, del_dir, del_file, path_present},
     types::PathType,
@@ -223,8 +223,7 @@ mod tests {
 
     // Mock functions or constants for testing
     // const PROGNAME: &str = "TEST_PROG";
-    const VERSION: &str = "R1.0.2"; // Adjust the version as needed
-
+    
     #[test]
     fn test_create_system_array_contents() {
         let expected_header = format!("<--REcS Array Version {}-->\n", VERSION);

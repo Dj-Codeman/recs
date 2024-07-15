@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
-use system::{
+use dusa_collection_utils::{
     errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
     functions::{make_dir, path_present},
     types::PathType,

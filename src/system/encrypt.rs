@@ -2,12 +2,12 @@ use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
-use pretty::dump;
+use simple_pretty::dump;
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
 use std::str;
 use substring::Substring;
-use system::{
+use dusa_collection_utils::{
     errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf},
     functions::truncate,
 };

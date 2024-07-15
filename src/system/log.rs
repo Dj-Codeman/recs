@@ -1,5 +1,5 @@
-use logging::append_log;
-use system::errors::ErrorArray;
+use simple_tmp_logger::append_log;
+use dusa_collection_utils::errors::ErrorArray;
 
 use crate::PROGNAME;
 

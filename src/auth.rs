@@ -8,7 +8,7 @@ use std::{
     io::Write,
     str,
 };
-use system::{
+use dusa_collection_utils::{
     errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
     functions::{create_hash, del_file, path_present},
     types::PathType,
