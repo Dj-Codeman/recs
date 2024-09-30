@@ -1,13 +1,17 @@
-use serde::{Deserialize, Serialize};
-use sysinfo::{System, SystemExt};
 use dusa_collection_utils::{
     errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
     functions::{make_dir, path_present},
     types::PathType,
 };
+use serde::{Deserialize, Serialize};
+use sysinfo::{System, SystemExt};
 
 use crate::{
-    array::{generate_system_array, index_system_array}, auth::generate_user_key, config::STREAMING_BUFFER_SIZE, log::log, PROGNAME
+    array::{generate_system_array, index_system_array},
+    auth::generate_user_key,
+    config::STREAMING_BUFFER_SIZE,
+    log::log,
+    PROGNAME,
 };
 
 // Static stuff
@@ -49,21 +53,21 @@ pub fn set_system(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf
     // This functions is responsible for creating the dir tree,
     // It also monitors the output of the functions that create keys and index for them
     if let Err(err) = make_folders(debug, errors.clone()).uf_unwrap() {
-        return uf::new(Err(err))
+        return uf::new(Err(err));
     }
 
     if let Err(e) = generate_system_array(errors.clone()) {
         return uf::new(Err(e));
     }
-    
+
     if let Err(e) = index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
         return uf::new(Err(e));
     }
 
     if let Err(e) = generate_user_key(debug, errors.clone(), warnings.clone()).uf_unwrap() {
-        return uf::new(Err(e))
+        return uf::new(Err(e));
     }
-    
+
     log("System array has been created and indexed".to_string());
 
     uf::new(Ok(()))
@@ -94,8 +98,11 @@ fn make_folders(debug: bool, mut errors: ErrorArray) -> uf<()> {
                 }
             }
             false => {
-                errors.push(ErrorArrayItem::new(Errors::GeneralError, String::from("System Path missing")));
-                return uf::new(Err(errors))
+                errors.push(ErrorArrayItem::new(
+                    Errors::GeneralError,
+                    String::from("System Path missing"),
+                ));
+                return uf::new(Err(errors));
             }
         },
         Err(e) => return uf::new(Err(e)),

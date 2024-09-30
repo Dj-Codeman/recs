@@ -15,13 +15,13 @@ mod local_env;
 mod log;
 #[path = "system/secrets.rs"]
 mod secret;
-use local_env::VERSION;
-use secret::{read_raw, write_raw};
 use dusa_collection_utils::{
     errors::{ErrorArray, OkWarning, UnifiedResult as uf, WarningArray},
     functions::{create_hash, del_file, path_present},
     types::PathType,
 };
+use local_env::VERSION;
+use secret::{read_raw, write_raw};
 
 use std::{
     fs::{File, OpenOptions},
@@ -152,13 +152,10 @@ fn ensure_max_map_exists(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
 
     match path_present(&max_map_path, errors.clone()).uf_unwrap() {
         Ok(true) => uf::new(Ok(())),
-        Ok(false) => {
-            match index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
-                Ok(_d) => uf::new(Ok(())),
-                Err(e) => return uf::new(Err(e)),
-            }
-
-        }
+        Ok(false) => match index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
+            Ok(_d) => uf::new(Ok(())),
+            Err(e) => return uf::new(Err(e)),
+        },
         Err(e) => uf::new(Err(e)),
     }
 }
@@ -195,8 +192,8 @@ pub fn store(
     {
         Ok(d) => {
             log(format!("Stored: value:{}, count: {} ", d.0, d.1));
-            return uf::new(Ok(()))
-        },
+            return uf::new(Ok(()));
+        }
         Err(e) => return uf::new(Err(e)),
     }
 }
@@ -334,7 +331,8 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> b
     let pretty_map_data: ChunkMap = serde_json::from_str(&map_data).unwrap();
 
     // ? calculating new hash
-    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num, errors.clone()).uf_unwrap() {
+    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num, errors.clone()).uf_unwrap()
+    {
         Ok(data) => (true, Some(data)),
         Err(_) => (false, None),
     };
@@ -347,7 +345,10 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> b
     };
 
     if new_hash == None {
-        log(format!("Failed to fetch chunk data for number {}", &map_num));
+        log(format!(
+            "Failed to fetch chunk data for number {}",
+            &map_num
+        ));
     }
 
     //  making new map

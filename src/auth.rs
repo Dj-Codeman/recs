@@ -1,17 +1,17 @@
 use hex;
 
 // use rand::distributions::{Distribution, Uniform};
+use dusa_collection_utils::{
+    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
+    functions::{create_hash, del_file, path_present},
+    types::PathType,
+};
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{read_to_string, OpenOptions},
     io::Write,
     str,
-};
-use dusa_collection_utils::{
-    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
-    functions::{create_hash, del_file, path_present},
-    types::PathType,
 };
 
 use crate::{
@@ -98,8 +98,9 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
                 system_paths.USER_KEY_LOCATION.clone(),
                 errors.clone(),
                 warnings.clone(),
-            ).uf_unwrap();
-    
+            )
+            .uf_unwrap();
+
             match result {
                 Ok(_) => {
                     if debug {
@@ -112,7 +113,6 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
         Ok(false) => (),
         Err(e) => return uf::new(Err(e)),
     }
-    
 
     // creating the master.json file
     let mut userkey_file = match OpenOptions::new()
@@ -251,7 +251,7 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
         Err(e) => {
             errors.push(ErrorArrayItem::from(e));
             return uf::new(Err(errors));
-        },
+        }
     };
 
     let verification_result: String = match decrypt(
@@ -269,8 +269,11 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
         true => return uf::new(Ok(userkey)),
         false => {
             log("Authentication request failed".to_string());
-            errors.push(ErrorArrayItem::new(Errors::InvalidSignature,format!("Given: {} Expected: {}", &verification_result, &secret)));
-            return uf::new(Err(errors))
+            errors.push(ErrorArrayItem::new(
+                Errors::InvalidSignature,
+                format!("Given: {} Expected: {}", &verification_result, &secret),
+            ));
+            return uf::new(Err(errors));
         }
     };
 }

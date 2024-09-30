@@ -1,17 +1,20 @@
+use dusa_collection_utils::{
+    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
+    functions::{create_hash, del_dir, del_file, path_present},
+    types::PathType,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
     io::{prelude::*, SeekFrom, Write},
     str,
 };
-use dusa_collection_utils::{
-    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
-    functions::{create_hash, del_dir, del_file, path_present},
-    types::PathType,
-};
 
 use crate::{
-    config::{ARRAY_LEN, CHUNK_SIZE}, encrypt::create_secure_chunk, local_env::{SystemPaths, VERSION}, log::log
+    config::{ARRAY_LEN, CHUNK_SIZE},
+    encrypt::create_secure_chunk,
+    local_env::{SystemPaths, VERSION},
+    log::log,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -56,7 +59,7 @@ pub fn generate_system_array(errors: ErrorArray) -> Result<(), ErrorArray> {
             // Log success message if writing to file succeeds
             log("System array file created".to_string());
             Ok(())
-        },
+        }
         Err(errors) => {
             // Log error if writing to file fails and return accumulated errors
             log("Errors happened while creating the system array file".to_string());
@@ -223,7 +226,7 @@ mod tests {
 
     // Mock functions or constants for testing
     // const PROGNAME: &str = "TEST_PROG";
-    
+
     #[test]
     fn test_create_system_array_contents() {
         let expected_header = format!("<--REcS Array Version {}-->\n", VERSION);

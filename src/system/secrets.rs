@@ -1,11 +1,3 @@
-use hex::encode;
-use nix::unistd::{chown, Uid};
-use rand::distributions::{Distribution, Uniform};
-use serde::{Deserialize, Serialize};
-use std::{
-    fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
-    io::{prelude::*, SeekFrom, Write},
-};
 #[allow(unused_imports)]
 use dusa_collection_utils::{
     errors::{
@@ -14,6 +6,14 @@ use dusa_collection_utils::{
     },
     functions::{create_hash, del_dir, del_file, path_present, truncate},
     types::PathType,
+};
+use hex::encode;
+use nix::unistd::{chown, Uid};
+use rand::distributions::{Distribution, Uniform};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
+    io::{prelude::*, SeekFrom, Write},
 };
 
 // self and create are user made code
@@ -236,8 +236,10 @@ pub fn write(
                                 Err(e) => return uf::new(Err(e)),
                             },
                             fixed_key,
-                            errors.clone()
-                        ).uf_unwrap() {
+                            errors.clone(),
+                        )
+                        .uf_unwrap()
+                        {
                             // TODO ^ Simplify this. It is I/o intensive needed multiple files calls multiple times a second
                             Ok(d) => d.into(),
                             Err(e) => {
@@ -488,8 +490,15 @@ pub fn write_raw(
                 }
             };
 
-            if let Err(err) = forget(dummy_owner.to_owned(), dummy_name.to_owned(), errors.clone(), warnings.clone()).uf_unwrap() {
-                return uf::new(Err(err))
+            if let Err(err) = forget(
+                dummy_owner.to_owned(),
+                dummy_name.to_owned(),
+                errors.clone(),
+                warnings.clone(),
+            )
+            .uf_unwrap()
+            {
+                return uf::new(Err(err));
             };
 
             return uf::new(Ok((key, recs_data, count)));
@@ -555,13 +564,11 @@ pub fn read_raw(
             // ? This mess decodes the vec array into a hex encoded string, then reads that into a normal &string
 
             let signature_data: String = match hex::decode(encoded_signature) {
-                Ok(decoded) => {
-                    match String::from_utf8(decoded) {
-                        Ok(utf8_string) => utf8_string,
-                        Err(e) => {
-                            errors.push(ErrorArrayItem::from(e));
-                            return uf::new(Err(errors));
-                        }
+                Ok(decoded) => match String::from_utf8(decoded) {
+                    Ok(utf8_string) => utf8_string,
+                    Err(e) => {
+                        errors.push(ErrorArrayItem::from(e));
+                        return uf::new(Err(errors));
                     }
                 },
                 Err(e) => {
@@ -569,7 +576,6 @@ pub fn read_raw(
                     return uf::new(Err(errors));
                 }
             };
-            
 
             signature += &signature_data;
 
@@ -708,7 +714,9 @@ pub fn read(
             since_the_epoch.as_secs()
         ));
 
-        if let Err(mut err) = del_file(tmp_path.clone(), errors.clone(), warnings.clone()).uf_unwrap() {
+        if let Err(mut err) =
+            del_file(tmp_path.clone(), errors.clone(), warnings.clone()).uf_unwrap()
+        {
             // this is just manipulating the order of the errors
             let err_data = err.pop();
             errors.push(err_data);
@@ -721,12 +729,13 @@ pub fn read(
         };
 
         // Generate the writing key for the file
-        let writing_key: String = match create_writing_key(chunk, fixed_key, errors.clone()).uf_unwrap() {
-            Ok(d) => d,
-            Err(e) => {
-                return uf::new(Err(e));
-            }
-        };
+        let writing_key: String =
+            match create_writing_key(chunk, fixed_key, errors.clone()).uf_unwrap() {
+                Ok(d) => d,
+                Err(e) => {
+                    return uf::new(Err(e));
+                }
+            };
 
         // Create chunk map from sig
         // ! this has to be modified to account for the second end byte
@@ -928,14 +937,22 @@ pub fn read(
         // secret_map.file_path
     } else {
         log("The secret map don't exist".to_string());
-        errors.push(ErrorArrayItem::new(Errors::InvalidMapData, String::from("The secret map does not exist")));
+        errors.push(ErrorArrayItem::new(
+            Errors::InvalidMapData,
+            String::from("The secret map does not exist"),
+        ));
         return uf::new(Err(errors));
     }
 }
 
-pub fn forget(secret_owner: String, secret_name: String, mut errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+pub fn forget(
+    secret_owner: String,
+    secret_name: String,
+    mut errors: ErrorArray,
+    warnings: WarningArray,
+) -> uf<()> {
     // creating the secret json file
-    log( "Forgetting secret".to_string());
+    log("Forgetting secret".to_string());
     let system_paths: SystemPaths = SystemPaths::new();
     let secret_map_path = PathType::Content(format!(
         "{}/{}-{}.meta",
@@ -957,43 +974,55 @@ pub fn forget(secret_owner: String, secret_name: String, mut errors: ErrorArray,
                     Ok(d) => d,
                     Err(e) => return uf::new(Err(e)),
                 };
-        
-                let secret_map_data = match decrypt(&cipher_map_data, &key_data, errors.clone()).uf_unwrap() {
-                    Ok(d) => d,
-                    Err(e) => return uf::new(Err(e)),
-                };
+
+                let secret_map_data =
+                    match decrypt(&cipher_map_data, &key_data, errors.clone()).uf_unwrap() {
+                        Ok(d) => d,
+                        Err(e) => return uf::new(Err(e)),
+                    };
 
                 let secret_map: SecretDataIndex = match serde_json::from_slice(&secret_map_data) {
                     Ok(d) => d,
                     Err(e) => {
                         errors.push(ErrorArrayItem::from(e));
-                        errors.push(ErrorArrayItem::new(Errors::GeneralError, String::from("Error reading secret data json")));
+                        errors.push(ErrorArrayItem::new(
+                            Errors::GeneralError,
+                            String::from("Error reading secret data json"),
+                        ));
                         return uf::new(Err(errors));
                     }
                 };
-        
-                let path_present_result = path_present(&secret_map.secret_path, errors.clone()).uf_unwrap();
-                
+
+                let path_present_result =
+                    path_present(&secret_map.secret_path, errors.clone()).uf_unwrap();
+
                 if path_present_result.unwrap_or(false) {
-                    if let Err(err) = del_file(secret_map.secret_path, errors.clone(), warnings.clone()).uf_unwrap() {
-                        return uf::new(Err(err))
+                    if let Err(err) =
+                        del_file(secret_map.secret_path, errors.clone(), warnings.clone())
+                            .uf_unwrap()
+                    {
+                        return uf::new(Err(err));
                     }
                 };
 
-                
-                match del_file(secret_map_path.clone(), errors.clone(), warnings.clone()).uf_unwrap() {
+                match del_file(secret_map_path.clone(), errors.clone(), warnings.clone())
+                    .uf_unwrap()
+                {
                     Ok(_) => {
                         log(format!("{} has been deleted", &secret_map_path));
                         return uf::new(Ok(()));
-                    },
+                    }
                     Err(e) => return uf::new(Err(e)),
                 };
-            },
+            }
             false => {
                 log(String::from("The file requested doesn't exist"));
-                errors.push(ErrorArrayItem::new(Errors::GeneralError, String::from("The file requested doesn't exist")));
+                errors.push(ErrorArrayItem::new(
+                    Errors::GeneralError,
+                    String::from("The file requested doesn't exist"),
+                ));
                 uf::new(Err(errors))
-            },
+            }
         },
         Err(e) => return uf::new(Err(e)),
     }
