@@ -1,6 +1,6 @@
 [package]
 name = "recs_lib"
-version = "2.5.2"
+version = "2.5.3"
 edition = "2021"
 authors = ["Darrion <dwhitfield@ramfield.net>"]
 description = "A confusing library for encrypting files and text"
@@ -32,6 +32,5 @@ sysinfo = "0.28.1"
 nix = "0.20.0"
 lazy_static = "1.4.0"
 # My junk
-simple_pretty = "0.1.0"
 simple_tmp_logger = "1.2.1"
 dusa_collection_utils = "2.3.2"

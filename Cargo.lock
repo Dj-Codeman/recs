@@ -1017,7 +1017,7 @@ dependencies = [
 
 [[package]]
 name = "recs_lib"
-version = "2.5.2"
+version = "2.5.3"
 dependencies = [
  "aes",
  "base64 0.21.7",
@@ -1036,7 +1036,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "simple_pretty",
  "simple_tmp_logger",
  "substring",
  "sysinfo",

@@ -8,7 +8,6 @@ use hex::{self, encode};
 use hmac::{Hmac, Mac};
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::Sha256;
-use simple_pretty::dump;
 use std::str;
 use substring::Substring;
 
@@ -213,7 +212,7 @@ fn create_hmac(cipherdata: &str, derive_key: &str) -> Result<String, ErrorArrayI
     if hmac.len() == 64 {
         Ok(hmac)
     } else {
-        dump(&hmac);
+        // dump(&hmac);
         Err(ErrorArrayItem::new(
             Errors::InvalidHMACSize,
             "HMAC size is invalid".to_string(),
