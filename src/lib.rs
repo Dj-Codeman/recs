@@ -11,13 +11,13 @@ mod encrypt;
 // pub mod errors;
 #[path = "enviornment.rs"]
 mod local_env;
-#[path = "system/log.rs"]
-mod log;
 #[path = "system/secrets.rs"]
 mod secret;
 use dusa_collection_utils::{
-    errors::{ErrorArray, OkWarning, UnifiedResult as uf, WarningArray},
+    errors::{OkWarning, UnifiedResult as uf},
     functions::{create_hash, del_file, path_present},
+    log,
+    log::LogLevel,
     types::PathType,
 };
 use local_env::VERSION;
@@ -33,7 +33,6 @@ use crate::{
     array_tools::fetch_chunk,
     config::{ARRAY_LEN, CHUNK_SIZE},
     local_env::{set_system, SystemPaths},
-    log::log,
     secret::{forget, read, write},
 };
 
@@ -76,7 +75,7 @@ pub fn set_prog(data: &'static str) {
 /// # Returns
 ///
 /// * `uf<()>` - A unified result indicating success or failure.
-pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+pub async fn initialize(temporary_path: bool) -> uf<()> {
     let debugging: bool = match unsafe { DEBUGGING } {
         Some(d) => match d {
             true => true,
@@ -94,13 +93,15 @@ pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
         false => false,
     };
 
-    log("RECS started".to_string());
+    log!(LogLevel::Info, "RECS started");
 
-    if let Err(e) = ensure_system_path(debug, errors.clone(), warnings.clone()).uf_unwrap() {
+    SystemPaths::set_current(temporary_path).await;
+
+    if let Err(e) = ensure_system_path(debug).await.uf_unwrap() {
         return uf::new(Err(e));
     }
 
-    if let Err(e) = ensure_max_map_exists(errors.clone(), warnings.clone()).uf_unwrap() {
+    if let Err(e) = ensure_max_map_exists().await.uf_unwrap() {
         return uf::new(Err(e));
     }
 
@@ -118,14 +119,17 @@ pub fn initialize(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
 /// # Returns
 ///
 /// * `uf<()>` - A unified result indicating success or failure.
-fn ensure_system_path(debug: bool, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
-    let system_paths = SystemPaths::new();
+async fn ensure_system_path(debug: bool) -> uf<()> {
+    let system_paths = SystemPaths::read_current().await;
 
-    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
+    match path_present(&system_paths.SYSTEM_ARRAY_LOCATION).uf_unwrap() {
         Ok(true) => (),
         Ok(false) => {
-            log("System array file does not exist, reinitialize recs".to_string());
-            if let Err(e) = set_system(debug, errors.clone(), warnings.clone()).uf_unwrap() {
+            log!(
+                LogLevel::Info,
+                "System array file does not exist, reinitialize recs"
+            );
+            if let Err(e) = set_system(debug).await.uf_unwrap() {
                 return uf::new(Err(e));
             }
         }
@@ -145,14 +149,14 @@ fn ensure_system_path(debug: bool, errors: ErrorArray, warnings: WarningArray) -
 /// # Returns
 ///
 /// * `uf<()>` - A unified result indicating success or failure.
-fn ensure_max_map_exists(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
-    let system_paths = SystemPaths::new();
+async fn ensure_max_map_exists() -> uf<()> {
+    let system_paths = SystemPaths::read_current().await;
     let max_map = ARRAY_LEN / CHUNK_SIZE;
     let max_map_path = PathType::Content(format!("{}/{}.map", system_paths.MAPS, max_map - 1));
 
-    match path_present(&max_map_path, errors.clone()).uf_unwrap() {
+    match path_present(&max_map_path).uf_unwrap() {
         Ok(true) => uf::new(Ok(())),
-        Ok(false) => match index_system_array(errors.clone(), warnings.clone()).uf_unwrap() {
+        Ok(false) => match index_system_array().await.uf_unwrap() {
             Ok(_d) => uf::new(Ok(())),
             Err(e) => return uf::new(Err(e)),
         },
@@ -173,25 +177,10 @@ fn ensure_max_map_exists(errors: ErrorArray, warnings: WarningArray) -> uf<()> {
 /// # Returns
 ///
 /// * `uf<()>` - A unified result indicating success or failure.
-pub fn store(
-    filename: PathType,
-    owner: String,
-    name: String,
-    errors: ErrorArray,
-    warnings: WarningArray,
-) -> uf<()> {
-    match write(
-        filename,
-        owner,
-        name,
-        false,
-        errors.clone(),
-        warnings.clone(),
-    )
-    .uf_unwrap()
-    {
+pub async fn store(filename: PathType, owner: String, name: String) -> uf<()> {
+    match write(filename, owner, name, false).await.uf_unwrap() {
         Ok(d) => {
-            log(format!("Stored: value:{}, count: {} ", d.0, d.1));
+            log!(LogLevel::Info, "Stored: value:{}, count: {} ", d.0, d.1);
             return uf::new(Ok(()));
         }
         Err(e) => return uf::new(Err(e)),
@@ -211,14 +200,12 @@ pub fn store(
 /// # Returns
 ///
 /// * `uf<OkWarning<(PathType, PathType)>>` - A unified result containing the decrypted file paths or an error.
-pub fn retrieve(
+pub async fn retrieve(
     owner: String,
     name: String,
     uid: u32,
-    errors: ErrorArray,
-    warnings: WarningArray,
 ) -> uf<OkWarning<(PathType, PathType)>> {
-    read(owner, name, uid, false, errors, warnings)
+    read(owner, name, uid, false).await
 }
 
 /// Removes a file.
@@ -233,8 +220,11 @@ pub fn retrieve(
 /// # Returns
 ///
 /// * `uf<()>` - A unified result indicating success or failure.
-pub fn remove(owner: String, name: String, errors: ErrorArray, warnings: WarningArray) -> uf<()> {
-    forget(owner, name, errors, warnings)
+pub async fn remove(owner: String, name: String) -> uf<()> {
+    match forget(owner, name).await {
+        Ok(_) => uf::new(Ok(())),
+        Err(err) => uf::new(Err(err)),
+    }
 }
 
 /// Checks if a file exists.
@@ -248,15 +238,15 @@ pub fn remove(owner: String, name: String, errors: ErrorArray, warnings: Warning
 /// # Returns
 ///
 /// * `uf<bool>` - A unified result indicating if the file exists or not.
-pub fn ping(owner: String, name: String, errors: ErrorArray) -> uf<bool> {
-    let system_paths: SystemPaths = SystemPaths::new();
+pub async fn ping(owner: String, name: String) -> uf<bool> {
+    let system_paths: SystemPaths = SystemPaths::read_current().await;
     let secret_map_path = PathType::Content(format!(
         "{}/{owner}-{name}.meta",
         system_paths.META,
         owner = owner,
         name = name
     ));
-    path_present(&secret_map_path, errors)
+    path_present(&secret_map_path)
 }
 
 /// Encrypts raw data.
@@ -270,12 +260,8 @@ pub fn ping(owner: String, name: String, errors: ErrorArray) -> uf<bool> {
 /// # Returns
 ///
 /// * `uf<(String, String, usize)>` - A unified result containing the encrypted data, key, and chunk size.
-pub fn encrypt_raw(
-    data: String,
-    errors: ErrorArray,
-    warnings: WarningArray,
-) -> uf<(String, String, usize)> {
-    write_raw(data.into(), errors, warnings)
+pub async fn encrypt_raw(data: String) -> uf<(String, String, usize)> {
+    write_raw(data.into()).await
 }
 
 /// Decrypts raw data.
@@ -291,14 +277,8 @@ pub fn encrypt_raw(
 /// # Returns
 ///
 /// * `uf<OkWarning<Vec<u8>>>` - A unified result containing the decrypted data or an error.
-pub fn decrypt_raw(
-    recs_data: String,
-    recs_key: String,
-    recs_chunks: usize,
-    errors: ErrorArray,
-    warnings: WarningArray,
-) -> uf<OkWarning<Vec<u8>>> {
-    read_raw(recs_data, recs_key, recs_chunks, errors, warnings)
+pub fn decrypt_raw(recs_data: String, recs_key: String, recs_chunks: usize) -> uf<Vec<u8>> {
+    read_raw(recs_data, recs_key, recs_chunks)
 }
 
 /// Updates the map with new data.
@@ -312,8 +292,8 @@ pub fn decrypt_raw(
 /// # Returns
 ///
 /// * `bool` - A boolean indicating if the update was successful.
-pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> bool {
-    let system_paths: SystemPaths = SystemPaths::new();
+pub async fn update_map(map_num: u32) -> bool {
+    let system_paths: SystemPaths = SystemPaths::read_current().await;
     // Add a result to return errors from this
     // ? Getting the current map data
     let map_path: PathType =
@@ -331,8 +311,7 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> b
     let pretty_map_data: ChunkMap = serde_json::from_str(&map_data).unwrap();
 
     // ? calculating new hash
-    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num, errors.clone()).uf_unwrap()
-    {
+    let chunk_data: (bool, Option<String>) = match fetch_chunk(map_num).await.uf_unwrap() {
         Ok(data) => (true, Some(data)),
         Err(_) => (false, None),
     };
@@ -345,10 +324,11 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> b
     };
 
     if new_hash == None {
-        log(format!(
+        log!(
+            LogLevel::Error,
             "Failed to fetch chunk data for number {}",
             &map_num
-        ));
+        );
     }
 
     //  making new map
@@ -362,7 +342,7 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> b
     };
 
     // write the new map file
-    let _ = del_file(map_path.clone(), errors.clone(), warnings.clone());
+    let _ = del_file(map_path.clone());
     let updated_map = serde_json::to_string_pretty(&new_map).unwrap();
 
     let mut map_file = OpenOptions::new()
@@ -373,8 +353,7 @@ pub fn update_map(map_num: u32, errors: ErrorArray, warnings: WarningArray) -> b
         .expect("File could not written to");
 
     if let Err(_e) = writeln!(map_file, "{}", updated_map) {
-        eprintln!("An error occurred");
-        log("Could save map data to file".to_string());
+        log!(LogLevel::Error, "Could save map data to file");
     };
 
     return true;

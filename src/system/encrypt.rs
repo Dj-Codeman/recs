@@ -1,8 +1,11 @@
 use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use dusa_collection_utils::{
-    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf},
+    errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
     functions::truncate,
+    log,
+    log::LogLevel,
+    stringy::Stringy,
 };
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
@@ -14,37 +17,33 @@ use substring::Substring;
 use crate::{
     // array_tools::fetch_chunk,
     config::ARRAY_LEN,
-    log::log,
 };
 
 pub type Aes256Cbc = Cbc<Aes256, Pkcs7>;
 
-pub fn create_secure_chunk() -> String {
+pub fn create_secure_chunk() -> Stringy {
     let key: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(ARRAY_LEN as usize)
         .map(char::from)
         .collect();
-    return key;
+    return Stringy::from_string(key);
 }
 
-fn create_iv() -> String {
+fn create_iv() -> Stringy {
     // Generating initial vector
-    let initial_vector: String = rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(16)
-        .map(char::from)
-        .collect();
+    let initial_vector = Stringy::from_string(
+        rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect(),
+    );
 
     return initial_vector;
 }
 
-pub fn encrypt(
-    data: Vec<u8>,
-    key: Vec<u8>,
-    buffer_size: usize,
-    mut errors: ErrorArray,
-) -> uf<String> {
+pub fn encrypt(data: Vec<u8>, key: Vec<u8>, buffer_size: usize) -> uf<String> {
     let iv = create_iv();
     let key_result: Result<Vec<u8>, ErrorArrayItem> =
         key.try_into().map_err(|e| ErrorArrayItem::from(e));
@@ -52,8 +51,7 @@ pub fn encrypt(
     let key = match key_result {
         Ok(d) => d,
         Err(e) => {
-            errors.push(e);
-            return uf::new(Err(errors));
+            return uf::new(Err(e));
         }
     };
 
@@ -63,8 +61,7 @@ pub fn encrypt(
     let cipher = match cipher_result {
         Ok(d) => d,
         Err(e) => {
-            errors.push(e);
-            return uf::new(Err(errors));
+            return uf::new(Err(e));
         }
     };
 
@@ -81,8 +78,7 @@ pub fn encrypt(
         Ok(d) => d,
         Err(e) => {
             let err_item = ErrorArrayItem::from(e);
-            errors.push(err_item);
-            return uf::new(Err(errors));
+            return uf::new(Err(err_item));
         }
     });
 
@@ -98,31 +94,29 @@ pub fn encrypt(
         Ok(key) => match create_hmac(&cipherdata, &key) {
             Ok(d) => d,
             Err(e) => {
-                errors.push(e);
-                return uf::new(Err(errors));
+                return uf::new(Err(e));
             }
         },
         Err(e) => {
-            errors.push(e);
-            return uf::new(Err(errors));
+            return uf::new(Err(e));
         }
     };
 
     cipherdata.push_str(&hmac);
 
     if cipherdata.is_empty() {
-        log("No cipher data recived".to_string());
+        log!(LogLevel::Debug, "No cipher data received");
 
-        errors.push(ErrorArrayItem::new(
+        return uf::new(Err(ErrorArrayItem::new(
             Errors::GeneralError,
             "No cipher data received".to_string(),
-        ));
+        )));
     }
 
     uf::new(Ok(cipherdata))
 }
 
-pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8>> {
+pub fn decrypt(cipherdata: &str, key: &str) -> uf<Vec<u8>> {
     // Calculate the length of cipherdata minus the HMAC
     let cipherdata_len: usize = cipherdata.len() - 64;
 
@@ -137,18 +131,16 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
     let new_hmac: String = match create_hmac(cipherdata_hmacless, key) {
         Ok(d) => d,
         Err(e) => {
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+            return uf::new(Err(e));
         }
     };
 
     // Verify HMAC
     if old_hmac != new_hmac {
-        errors.push(ErrorArrayItem::new(
+        return uf::new(Err(ErrorArrayItem::new(
             Errors::InvalidHMACData,
             "Invalid HMAC".to_string(),
-        ));
-        return uf::new(Err(errors));
+        )));
     }
 
     // Extract IV
@@ -170,25 +162,20 @@ pub fn decrypt(cipherdata: &str, key: &str, mut errors: ErrorArray) -> uf<Vec<u8
     let mut buf: Vec<u8> = match decoded_ciphertext_result {
         Ok(d) => d,
         Err(e) => {
-            errors.push(e);
-            return uf::new(Err(errors));
+            return uf::new(Err(e));
         }
     };
 
     let decrypted_bytes_result: Result<Vec<u8>, block_modes::BlockModeError> = match cipher_result {
         Ok(cipher) => cipher.decrypt(&mut buf).map(|b| b.to_vec()),
         Err(e) => {
-            errors.push(e);
-            return uf::new(Err(errors));
+            return uf::new(Err(e));
         }
     };
 
     match decrypted_bytes_result {
         Ok(d) => uf::new(Ok(d)),
-        Err(e) => {
-            errors.push(ErrorArrayItem::from(e));
-            uf::new(Err(errors))
-        }
+        Err(e) => return uf::new(Err(ErrorArrayItem::from(e))),
     }
 }
 

@@ -1,5 +1,6 @@
-use dusa_collection_utils::errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf};
+use dusa_collection_utils::errors::{ErrorArrayItem, Errors, UnifiedResult as uf};
 use dusa_collection_utils::functions::create_hash;
+use dusa_collection_utils::{log, log::LogLevel};
 use dusa_collection_utils::types::PathType;
 use rand::distributions::{Distribution, Uniform};
 use std::fs::File;
@@ -8,9 +9,8 @@ use std::io::{Read, Seek, SeekFrom};
 use crate::array::{array_arimitics, ChunkMap};
 use crate::config::CHUNK_SIZE;
 use crate::local_env::{SystemPaths, VERSION};
-use crate::log::log;
 
-pub fn fetch_chunk(num: u32, mut errors: ErrorArray) -> uf<String> {
+pub async fn fetch_chunk(num: u32) -> uf<String> {
     let upper_limit = array_arimitics();
     let lower_limit = 1;
 
@@ -23,32 +23,30 @@ pub fn fetch_chunk(num: u32, mut errors: ErrorArray) -> uf<String> {
         _ => num,
     };
 
-    match fetch_chunk_by_number(map_num, &mut errors) {
+    match fetch_chunk_by_number(map_num).await {
         Ok(d) => uf::new(Ok(d)),
         Err(e) => {
-            errors.push(e);
-            uf::new(Err(errors))
+            uf::new(Err(e))
         }
     }
 }
 
-fn fetch_chunk_by_number(map_num: u32, errors: &mut ErrorArray) -> Result<String, ErrorArrayItem> {
-    let system_paths = SystemPaths::new();
+async fn fetch_chunk_by_number(map_num: u32) -> Result<String, ErrorArrayItem> {
+    let system_paths = SystemPaths::read_current().await;
     let map_path = PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, map_num));
 
-    let map_data = read_map_data(&map_path, errors)?;
+    let map_data = read_map_data(&map_path)?;
     let pretty_map_data = parse_map_data(&map_data)?;
-    verify_map_version(&pretty_map_data, errors)?;
+    verify_map_version(&pretty_map_data)?;
 
-    let chunk = read_chunk_data(&pretty_map_data, errors)?;
-    verify_chunk_integrity(&chunk, &pretty_map_data, errors)?;
+    let chunk = read_chunk_data(&pretty_map_data).await?;
+    verify_chunk_integrity(&chunk, &pretty_map_data)?;
 
     Ok(chunk)
 }
 
-fn read_map_data(map_path: &PathType, _errors: &mut ErrorArray) -> Result<String, ErrorArrayItem> {
+fn read_map_data(map_path: &PathType) -> Result<String, ErrorArrayItem> {
     let mut map_file = File::open(map_path).map_err(|e| {
-        log(e.to_string());
         ErrorArrayItem::from(e)
     })?;
 
@@ -66,12 +64,11 @@ fn parse_map_data(map_data: &str) -> Result<ChunkMap, ErrorArrayItem> {
 
 fn verify_map_version(
     pretty_map_data: &ChunkMap,
-    _errors: &mut ErrorArray,
 ) -> Result<(), ErrorArrayItem> {
     if pretty_map_data.version != VERSION {
-        log(format!(
+        log!(LogLevel::Warn,
                 "The maps used are from an older version of recs. \n --reindex-system[NOT IMPLEMENTED YET] to fix this issue. (current data will be safe)"
-            ));
+            );
         return Err(ErrorArrayItem::new(
             Errors::GeneralError,
             "Invalid map version".to_string(),
@@ -81,11 +78,10 @@ fn verify_map_version(
     Ok(())
 }
 
-fn read_chunk_data(
+async fn read_chunk_data(
     pretty_map_data: &ChunkMap,
-    _errors: &mut ErrorArray,
 ) -> Result<String, ErrorArrayItem> {
-    let system_paths = SystemPaths::new();
+    let system_paths = SystemPaths::read_current().await;
     let chunk_start = pretty_map_data.chunk_beg;
     let chunk_end = pretty_map_data.chunk_end;
     let mut buffer = vec![0; CHUNK_SIZE as usize];
@@ -94,7 +90,7 @@ fn read_chunk_data(
         File::open(system_paths.SYSTEM_ARRAY_LOCATION).map_err(|e| ErrorArrayItem::from(e))?;
 
     if (chunk_end - chunk_start) < CHUNK_SIZE as u32 {
-        log("Invalid secret chunk length".to_string());
+        log!(LogLevel::Error, "Invalid secret chunk length");
     }
 
     file.seek(SeekFrom::Start(chunk_start as u64))
@@ -110,7 +106,6 @@ fn read_chunk_data(
 fn verify_chunk_integrity(
     chunk: &str,
     pretty_map_data: &ChunkMap,
-    _errors: &mut ErrorArray,
 ) -> Result<(), ErrorArrayItem> {
     let chunk_hash = create_hash(chunk.to_string());
 
@@ -123,7 +118,7 @@ fn verify_chunk_integrity(
             I would recommend exporting all data to assess any losses and reinitialize",
             pretty_map_data.chunk_num
         );
-        log(log_data);
+        log!(LogLevel::Error, "{}", log_data);
         return Err(ErrorArrayItem::new(
             Errors::GeneralError,
             "Chunk integrity check failed".to_string(),

@@ -1,8 +1,12 @@
 use dusa_collection_utils::{
-    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
-    functions::{create_hash, del_dir, del_file, path_present},
+    errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
+    functions::{create_hash, del_dir, del_file},
+    log,
+    log::LogLevel,
+    stringy::Stringy,
     types::PathType,
 };
+
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
@@ -14,7 +18,6 @@ use crate::{
     config::{ARRAY_LEN, CHUNK_SIZE},
     encrypt::create_secure_chunk,
     local_env::{SystemPaths, VERSION},
-    log::log,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,184 +42,152 @@ pub fn array_arimitics() -> u32 {
     return total_chunks;
 }
 
-pub fn generate_system_array(errors: ErrorArray) -> Result<(), ErrorArray> {
-    let system_paths: SystemPaths = SystemPaths::new();
+pub async fn generate_system_array() -> Result<(), ErrorArrayItem> {
+    let system_paths: SystemPaths = SystemPaths::read_current().await;
 
     // Attempt to log an initial message
-    log("Generating system array".to_string());
+    log!(LogLevel::Info, "Generating system array");
 
     // Remove the existing system array directory
-    if let Err(err) = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION, errors.clone()).uf_unwrap() {
-        err.display(false);
+    if let Err(err) = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION).uf_unwrap() {
+        log!(LogLevel::Error, "{}", err);
+        return Err(err);
     };
 
     // Create the system array contents
-    let system_array_contents = create_system_array_contents();
+    let system_array_contents: Stringy = create_system_array_contents();
 
     // Write the system array contents to the file
-    match write_system_array_to_file(&system_array_contents, errors.clone()).uf_unwrap() {
-        Ok(_) => {
-            // Log success message if writing to file succeeds
-            log("System array file created".to_string());
-            Ok(())
-        }
-        Err(errors) => {
-            // Log error if writing to file fails and return accumulated errors
-            log("Errors happened while creating the system array file".to_string());
-            Err(errors)
-        }
+    if let Err(err) = write_system_array_to_file(&system_array_contents).await {
+        return Err(err);
     }
+    log!(LogLevel::Info, "System array file created");
+
+    Ok(())
 }
 
-fn create_system_array_contents() -> String {
+fn create_system_array_contents() -> Stringy {
     let system_array_header = format!("<--REcS Array Version {}-->\n", VERSION);
 
     let system_array_chunk = create_secure_chunk();
 
     let system_array_footer = "\n</--REcS Array-->";
 
-    format!(
+    Stringy::from_string(format!(
         "{}{}{}",
         system_array_header, system_array_chunk, system_array_footer
-    )
+    ))
 }
 
-pub fn write_system_array_to_file(contents: &str, mut errors: ErrorArray) -> uf<()> {
-    let system_paths: SystemPaths = SystemPaths::new();
+pub async fn write_system_array_to_file(contents: &str) -> Result<(), ErrorArrayItem> {
+    let system_paths = SystemPaths::read_current().await;
 
-    // Attempt to open the file
-    let system_array_file_result = OpenOptions::new()
-        .create_new(true)
+    // Open the file with simplified error mapping and chaining
+    let mut system_array_file = OpenOptions::new()
+        .create(true) // Using `create(true)` instead of `create_new(true)` allows overwriting
         .write(true)
         .append(true)
         .open(system_paths.SYSTEM_ARRAY_LOCATION.to_owned())
-        .map_err(|e| {
-            log("Error opening system array file".to_string());
-            errors.push(ErrorArrayItem::new(Errors::OpeningFile, e.to_string()));
-            errors.clone()
-        });
+        .map_err(ErrorArrayItem::from)?;
 
-    match system_array_file_result {
-        Ok(mut system_array_file) => {
-            if let Err(e) = write!(system_array_file, "{}", contents) {
-                log("Error while writing to the system array file".to_string());
-                errors.push(ErrorArrayItem::new(Errors::CreatingFile, e.to_string()));
-                return uf::new(Err(errors));
-            } else {
-                return uf::new(Ok(()));
-            }
-        }
-        Err(e) => uf::new(Err(e)),
-    }
+    // Write to the file directly and handle any potential errors
+    write!(system_array_file, "{}", contents).map_err(|e| {
+        log!(
+            LogLevel::Error,
+            "Error while writing to the system array file: {:?}",
+            e
+        );
+        ErrorArrayItem::from(e)
+    })?;
+
+    Ok(())
 }
 
 // indexing the created array
-
-pub fn index_system_array(mut errors: ErrorArray, warnings: WarningArray) -> uf<bool> {
+pub async fn index_system_array() -> uf<bool> {
+    let system_paths = SystemPaths::read_current().await;
     let mut chunk_number: u32 = 1;
     let mut range_start: u32 = BEG_CHAR;
     let mut range_end: u32 = BEG_CHAR + CHUNK_SIZE as u32;
-    let system_paths: SystemPaths = SystemPaths::new();
-    #[allow(unused_assignments)] // * cheap fix
-    let mut chunk: String = String::new();
 
-    let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION.to_string()) {
-        Ok(d) => d,
-        Err(_e) => {
-            // errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+    // Validate initial range to ensure it's correct
+    if (range_end - range_start) < CHUNK_SIZE as u32 {
+        return uf::new(Err(ErrorArrayItem::new(
+            Errors::GeneralError,
+            "Invalid chunk length".to_string(),
+        )));
+    }
+
+    // Attempt to open the file for reading
+    let mut file = match File::open(system_paths.SYSTEM_ARRAY_LOCATION.clone()) {
+        Ok(file) => file,
+        Err(e) => {
+            return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
 
-    if (range_end - range_start) < CHUNK_SIZE as u32 {
-        let err_item =
-            ErrorArrayItem::new(Errors::GeneralError, "Invalid chunk legnth".to_string());
-        errors.push(err_item);
-        return uf::new(Err(errors));
-    }
-
-    loop {
-        if range_start > END_CHAR {
-            break;
+    while range_start <= END_CHAR {
+        // Seek to the start of the chunk and handle errors
+        if let Err(err) = file.seek(SeekFrom::Start(range_start as u64)) {
+            return uf::new(Err(ErrorArrayItem::from(err)));
         }
 
-        match file.seek(SeekFrom::Start(range_start as u64)) {
-            Ok(d) => d,
-            Err(e) => {
-                errors.push(ErrorArrayItem::from(e));
-                return uf::new(Err(errors));
-            }
-        };
-
-        let mut buffer = vec![0; CHUNK_SIZE as usize];
+        let mut buffer: Vec<u8> = vec![0; CHUNK_SIZE as usize];
         match file.read_exact(&mut buffer) {
             Ok(_) => {
-                chunk = buffer.iter().map(|data| format!("{:02X}", data)).collect();
+                let chunk: String = buffer.iter().map(|byte| format!("{:02X}", byte)).collect();
                 let chunk_hash = create_hash(chunk);
 
                 let chunk_map = ChunkMap {
                     location: system_paths.SYSTEM_ARRAY_LOCATION.clone(),
                     version: VERSION.to_string(),
-                    chunk_hsh: chunk_hash.to_string(),
+                    chunk_hsh: chunk_hash,
                     chunk_num: chunk_number,
                     chunk_beg: range_start,
                     chunk_end: range_end,
                 };
 
-                let chunk_map_path: PathType =
+                // Construct path for the chunk map file
+                let chunk_map_path =
                     PathType::Content(format!("{}/chunk_{}.map", system_paths.MAPS, chunk_number));
 
-                if path_present(&chunk_map_path, errors.clone()).unwrap() {
-                    match del_file(chunk_map_path.clone(), errors.clone(), warnings.clone())
-                        .uf_unwrap()
-                    {
-                        Ok(_) => (),
-                        Err(e) => return uf::new(Err(e)),
-                    };
+                // Delete existing chunk map file if it exists
+                if chunk_map_path.exists() {
+                    if let Err(err) = del_file(chunk_map_path.clone()).uf_unwrap() {
+                        return uf::new(Err(err));
+                    }
                 }
 
+                // Serialize chunk map and handle potential serialization errors
                 let pretty_chunk_map = match serde_json::to_string_pretty(&chunk_map) {
-                    Ok(d) => d,
+                    Ok(map) => map,
                     Err(e) => {
-                        errors.push(ErrorArrayItem::from(e));
-                        return uf::new(Err(errors));
+                        return uf::new(Err(ErrorArrayItem::from(e)));
                     }
                 };
 
-                let mut chunk_map_file = match OpenOptions::new()
+                // Write the serialized chunk map to a new file
+                if let Err(e) = OpenOptions::new()
                     .create_new(true)
                     .write(true)
-                    .append(true)
                     .open(&chunk_map_path)
+                    .and_then(|mut file| write!(file, "{}", pretty_chunk_map))
                 {
-                    Ok(d) => d,
-                    Err(e) => {
-                        errors.push(ErrorArrayItem::from(e));
-                        return uf::new(Err(errors));
-                    }
-                };
+                    return uf::new(Err(ErrorArrayItem::from(e)));
+                }
 
-                match write!(chunk_map_file, "{}", pretty_chunk_map) {
-                    Ok(_) => {
-                        log("No Cipher Data received".to_string());
-                    }
-                    Err(e) => {
-                        errors.push(ErrorArrayItem::from(e));
-                        return uf::new(Err(errors));
-                    }
-                };
+                log!(LogLevel::Trace, "Chunk indexed successfully");
             }
-            Err(_) => break,
+            Err(_) => break, // Break the loop on read error (EOF or other issue)
         }
 
+        // Move to the next chunk
         chunk_number += 1;
-        // chunk = "".to_string();
         range_start = range_end;
         range_end += CHUNK_SIZE as u32;
     }
 
-    log("No Cipher Data received".to_string());
-
+    log!(LogLevel::Info, "Indexing completed successfully");
     uf::new(Ok(true))
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "recs_lib"
-version = "2.5.3"
+version = "3.0.0"
 edition = "2021"
 authors = ["Darrion <dwhitfield@ramfield.net>"]
 description = "A confusing library for encrypting files and text"
@@ -21,9 +21,7 @@ hmac = "0.12.1"
 # can these two be merged ?
 rand = "0.8.5"
 rand_core = { version = "0.6", features = ["std"] }
-random-string = "1.1.0"
 ring = "0.16.20"
-rpassword = "0.0.4"
 serde = { version = "1.0.126", features = ["derive"] }
 serde_json = "1.0.64"
 sha2 = "0.10"
@@ -33,4 +31,6 @@ nix = "0.20.0"
 lazy_static = "1.4.0"
 # My junk
 simple_tmp_logger = "1.2.1"
-dusa_collection_utils = "2.3.2"
+#dusa_collection_utils = "2.3.2"
+dusa_collection_utils = "3.0.1"
+tempfile = "3.13.0"

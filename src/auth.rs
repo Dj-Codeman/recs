@@ -2,8 +2,10 @@ use hex;
 
 // use rand::distributions::{Distribution, Uniform};
 use dusa_collection_utils::{
-    errors::{ErrorArray, ErrorArrayItem, Errors, UnifiedResult as uf, WarningArray},
+    errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
     functions::{create_hash, del_file, path_present},
+    log,
+    log::LogLevel,
     types::PathType,
 };
 use ring::pbkdf2;
@@ -19,7 +21,6 @@ use crate::{
     array_tools::fetch_chunk,
     encrypt::{decrypt, encrypt},
     local_env::{SystemPaths, VERSION},
-    log::log,
 };
 
 // pbkdf Generator specs
@@ -37,37 +38,34 @@ pub struct KeyIndex {
 }
 
 // ! KEY GENERATION SECTION
-pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningArray) -> uf<()> {
+pub async fn generate_user_key(debug: bool) -> uf<()> {
     // This function generates to key we use to encrypt data
     // The key is not actually stored but a value is encrypted with
     // A generated key and saved. At decryption time the key is checked against
     // The stored value. If it is the the same value are originally encrypted
     // We can attempt to decrypt the data given
 
-    let salt: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+    let salt: String = match fetch_chunk_helper(1).await.uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
-    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone()).uf_unwrap()
-    {
+    let secret: String = match fetch_chunk_helper(array_arimitics() - 1).await.uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
         Err(e) => {
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+            return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
     let iteration = match std::num::NonZeroU32::new(num) {
         Some(d) => d,
         None => {
-            errors.push(ErrorArrayItem::new(
+            return uf::new(Err(ErrorArrayItem::new(
                 Errors::InvalidType,
                 String::from("string conversion error"),
-            ));
-            return uf::new(Err(errors));
+            )));
         }
     };
     let mut password_key = [0; 16]; // Setting the key size
@@ -84,27 +82,21 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
     // * creating the integrity file
 
     let secret: String = "The hotdog man isn't real !?".to_string();
-    let cipher_integrity: String =
-        match encrypt(secret.into(), userkey.into(), 1024, errors.clone()).uf_unwrap() {
-            Ok(d) => d,
-            Err(e) => return uf::new(Err(e)),
-        };
+    let cipher_integrity: String = match encrypt(secret.into(), userkey.into(), 1024).uf_unwrap() {
+        Ok(d) => d,
+        Err(e) => return uf::new(Err(e)),
+    };
 
-    let system_paths: SystemPaths = SystemPaths::new();
+    let system_paths: SystemPaths = SystemPaths::read_current().await;
 
-    match path_present(&system_paths.USER_KEY_LOCATION, errors.clone()).uf_unwrap() {
+    match path_present(&system_paths.USER_KEY_LOCATION).uf_unwrap() {
         Ok(true) => {
-            let result = del_file(
-                system_paths.USER_KEY_LOCATION.clone(),
-                errors.clone(),
-                warnings.clone(),
-            )
-            .uf_unwrap();
+            let result = del_file(system_paths.USER_KEY_LOCATION.clone()).uf_unwrap();
 
             match result {
                 Ok(_) => {
                     if debug {
-                        log("The old userkey has been deleted".to_string());
+                        log!(LogLevel::Trace, "The old userkey has been deleted");
                     }
                 }
                 Err(e) => return uf::new(Err(e)),
@@ -123,22 +115,24 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
     {
         Ok(d) => d,
         Err(e) => {
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+            return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
 
     if let Err(e) = write!(userkey_file, "{}", cipher_integrity) {
-        log("An error occurred while writing data to the master JSON file".to_string());
-        errors.push(ErrorArrayItem::from(e));
-        return uf::new(Err(errors));
+        log!(
+            LogLevel::Error,
+            "An error occurred while writing data to the master JSON file"
+        );
+        return uf::new(Err(ErrorArrayItem::from(e)));
     }
 
     if debug {
-        log(format!(
+        log!(
+            LogLevel::Trace,
             "THIS IS A SECRET. The userkey check has been generated: {}",
             &cipher_integrity
-        ));
+        );
     }
 
     let checksum_string = create_hash(cipher_integrity);
@@ -160,13 +154,8 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
         PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
 
     // Deleting and recreating the json file
-    if let Err(e) = del_file(userkey_map_path.clone(), errors.clone(), warnings.clone()).uf_unwrap()
-    {
+    if let Err(e) = del_file(userkey_map_path.clone()).uf_unwrap() {
         return uf::new(Err(e));
-    }
-
-    if debug {
-        log("Deleting old userkey if it exists".to_string());
     }
 
     // writing to the master.json file
@@ -178,59 +167,56 @@ pub fn generate_user_key(debug: bool, mut errors: ErrorArray, warnings: WarningA
     {
         Ok(d) => d,
         Err(e) => {
-            log(format!(
+            log!(
+                LogLevel::Error,
                 "Failed to open the new userkey.json path {}, {}",
-                &userkey_map_path, e
-            ));
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+                &userkey_map_path,
+                e
+            );
+            return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
 
     match writeln!(userkey_map_file, "{}", pretty_userkey_map) {
         Ok(_) => {
-            log("User authentication created".to_string());
+            log!(LogLevel::Debug, "User authentication created");
             return uf::new(Ok(()));
         }
         Err(e) => {
-            log(format!("Could save map data to file: {}", e));
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+            log!(LogLevel::Error, "Could save map data to file: {}", e);
+            return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
 }
 
-pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
-    let system_paths: SystemPaths = SystemPaths::new();
+pub async fn auth_user_key() -> uf<String> {
+    let system_paths: SystemPaths = SystemPaths::read_current().await;
     // let _ = append_log(
     //     unsafe { &PROGNAME },
     //     "user key authentication request started",
     // );
 
-    let salt: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+    let salt: String = match fetch_chunk_helper(1).await.uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
-    let secret: String = match fetch_chunk_helper(array_arimitics() - 1, errors.clone()).uf_unwrap()
-    {
+    let secret: String = match fetch_chunk_helper(array_arimitics() - 1).await.uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
         Err(e) => {
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+            return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
     let iteration = match std::num::NonZeroU32::new(num) {
         Some(d) => d,
         None => {
-            errors.push(ErrorArrayItem::new(
+            return uf::new(Err(ErrorArrayItem::new(
                 Errors::InvalidType,
                 String::from("string conversion error"),
-            ));
-            return uf::new(Err(errors));
+            )));
         }
     };
     let mut password_key = [0; 16]; // Setting the key size
@@ -249,44 +235,37 @@ pub fn auth_user_key(mut errors: ErrorArray) -> uf<String> {
     let verification_ciphertext: String = match read_to_string(&system_paths.USER_KEY_LOCATION) {
         Ok(d) => d,
         Err(e) => {
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+            return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
 
-    let verification_result: String = match decrypt(
-        &verification_ciphertext.to_string(),
-        &userkey,
-        errors.clone(),
-    )
-    .uf_unwrap()
-    {
-        Ok(d) => String::from_utf8_lossy(&d).to_string(),
-        Err(e) => return uf::new(Err(e)),
-    };
+    let verification_result: String =
+        match decrypt(&verification_ciphertext.to_string(), &userkey).uf_unwrap() {
+            Ok(d) => String::from_utf8_lossy(&d).to_string(),
+            Err(e) => return uf::new(Err(e)),
+        };
 
     match verification_result == secret {
         true => return uf::new(Ok(userkey)),
         false => {
-            log("Authentication request failed".to_string());
-            errors.push(ErrorArrayItem::new(
+            log!(LogLevel::Error, "Authentication request failed");
+            return uf::new(Err(ErrorArrayItem::new(
                 Errors::InvalidSignature,
                 format!("Given: {} Expected: {}", &verification_result, &secret),
-            ));
-            return uf::new(Err(errors));
+            )));
         }
     };
 }
 
 // todo change these security goals for multi system things
 
-pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray) -> uf<String> {
+pub async fn create_writing_key(key: String, fixed_key: bool) -> uf<String> {
     // golang compatible ????
     let mut prekey_str: String = String::new();
 
     let user_key: String = match fixed_key {
         true => key.clone(),
-        false => match auth_user_key(errors.clone()).uf_unwrap() {
+        false => match auth_user_key().await.uf_unwrap() {
             Ok(d) => d,
             Err(e) => return uf::new(Err(e)),
         },
@@ -297,25 +276,23 @@ pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray) 
 
     let prekey = create_hash(prekey_str);
 
-    let salt: String = match fetch_chunk_helper(1, errors.clone()).uf_unwrap() {
+    let salt: String = match fetch_chunk_helper(1).await.uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
     let num: u32 = match "95180".parse() {
         Ok(d) => d,
         Err(e) => {
-            errors.push(ErrorArrayItem::from(e));
-            return uf::new(Err(errors));
+            return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
     let iteration = match std::num::NonZeroU32::new(num) {
         Some(d) => d,
         None => {
-            errors.push(ErrorArrayItem::new(
+            return uf::new(Err(ErrorArrayItem::new(
                 Errors::InvalidType,
                 String::from("string conversion error"),
-            ));
-            return uf::new(Err(errors));
+            )));
         }
     };
     let mut final_key = [0; 16];
@@ -332,8 +309,8 @@ pub fn create_writing_key(key: String, fixed_key: bool, mut errors: ErrorArray) 
 }
 
 // * helper function for fetching chunks
-fn fetch_chunk_helper(num: u32, errors: ErrorArray) -> uf<String> {
-    let chunk_data: String = match fetch_chunk(num, errors.clone()).uf_unwrap() {
+async fn fetch_chunk_helper(num: u32) -> uf<String> {
+    let chunk_data: String = match fetch_chunk(num).await.uf_unwrap() {
         Ok(d) => d,
         Err(e) => return uf::new(Err(e)),
     };
