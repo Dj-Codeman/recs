@@ -10,7 +10,7 @@ use dusa_collection_utils::{
 use dusa_collection_utils::{log, log::LogLevel};
 use hex::encode;
 use nix::unistd::{chown, Uid};
-use rand::distributions::{Distribution, Uniform};
+use rand::{distributions::{Distribution, Uniform}, rngs::ThreadRng};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
@@ -91,9 +91,7 @@ pub async fn write(
         let upper_limit: u32 = array_arimitics();
         let lower_limit: u32 = 1;
 
-        let mut rng: rand::prelude::ThreadRng = rand::thread_rng();
-        let range: Uniform<u32> = Uniform::new(lower_limit, upper_limit);
-        let num: u32 = range.sample(&mut rng);
+        let num: u32 = generate_random_number(lower_limit, upper_limit).await;
 
         // creating the rest of the struct data
         let unique_id: String =
@@ -980,4 +978,11 @@ fn padding_count(number: usize) -> String {
         let number_string: String = String::from(&number.to_string());
         return number_string;
     }
+}
+
+async fn generate_random_number(lower_limit: u32, upper_limit: u32) -> u32 {
+    let mut rng: ThreadRng = rand::thread_rng(); // This is `Send`
+    let range: Uniform<u32> = Uniform::new(lower_limit, upper_limit);
+    let num: u32 = range.sample(&mut rng);
+    num
 }
