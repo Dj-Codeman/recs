@@ -176,7 +176,6 @@ pub async fn index_system_array() -> uf<bool> {
                     return uf::new(Err(ErrorArrayItem::from(e)));
                 }
 
-                log!(LogLevel::Trace, "Chunk indexed successfully");
             }
             Err(_) => break, // Break the loop on read error (EOF or other issue)
         }
