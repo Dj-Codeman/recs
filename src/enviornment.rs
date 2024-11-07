@@ -90,7 +90,7 @@ impl SystemPaths {
         };
 
         *write_guard = system_path;
-        log!(LogLevel::Info, "System paths updated successfully");
+        log!(LogLevel::Debug, "System paths updated successfully");
     }
 }
 
@@ -115,7 +115,7 @@ pub async fn set_system(debug: bool) -> uf<()> {
         return uf::new(Err(e));
     }
 
-    log!(LogLevel::Info, "System array has been created and indexed");
+    log!(LogLevel::Trace, "System array has been created and indexed");
 
     uf::new(Ok(()))
 }

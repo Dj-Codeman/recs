@@ -67,7 +67,7 @@ fn verify_map_version(
 ) -> Result<(), ErrorArrayItem> {
     if pretty_map_data.version != VERSION {
         log!(LogLevel::Warn,
-                "The maps used are from an older version of recs. \n --reindex-system[NOT IMPLEMENTED YET] to fix this issue. (current data will be safe)"
+                "RECS: The maps used are from an older version of recs. \n --reindex-system[NOT IMPLEMENTED YET] to fix this issue. (current data will be safe)"
             );
         return Err(ErrorArrayItem::new(
             Errors::GeneralError,

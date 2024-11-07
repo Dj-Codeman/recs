@@ -46,7 +46,7 @@ pub async fn generate_system_array() -> Result<(), ErrorArrayItem> {
     let system_paths: SystemPaths = SystemPaths::read_current().await;
 
     // Attempt to log an initial message
-    log!(LogLevel::Info, "Generating system array");
+    log!(LogLevel::Trace, "RECS: Generating system array");
 
     // Remove the existing system array directory
     if let Err(err) = del_dir(&system_paths.SYSTEM_ARRAY_LOCATION).uf_unwrap() {
@@ -61,7 +61,7 @@ pub async fn generate_system_array() -> Result<(), ErrorArrayItem> {
     if let Err(err) = write_system_array_to_file(&system_array_contents).await {
         return Err(err);
     }
-    log!(LogLevel::Info, "System array file created");
+    log!(LogLevel::Trace, "RECS: System array file created");
 
     Ok(())
 }
@@ -187,7 +187,7 @@ pub async fn index_system_array() -> uf<bool> {
         range_end += CHUNK_SIZE as u32;
     }
 
-    log!(LogLevel::Info, "Indexing completed successfully");
+    log!(LogLevel::Trace, "RECS: Indexing completed successfully");
     uf::new(Ok(true))
 }
 

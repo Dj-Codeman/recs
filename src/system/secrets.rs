@@ -70,7 +70,7 @@ pub async fn write(
     };
 
     log!(
-        LogLevel::Info,
+        LogLevel::Trace,
         "{} '{}'",
         "Attempting to encrypt",
         &filename
@@ -174,11 +174,11 @@ pub async fn write(
 
         match secret_file {
             Ok(_) => {
-                log!(LogLevel::Info, "File created: {}", &secret_path);
+                log!(LogLevel::Trace, "File created: {}", &secret_path);
             }
             Err(ref err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
                 // ! might panic
-                log!(LogLevel::Warn, "The file already exists {}", &secret_path);
+                log!(LogLevel::Trace, "The file already exists {}", &secret_path);
                 // return uf::new(Err(ErrorArrayItem::from(err)));
             }
             Err(err) => {
@@ -261,7 +261,7 @@ pub async fn write(
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     // reached end of file
-                    log!(LogLevel::Warn, "Finished reading data from {}", &filename);
+                    log!(LogLevel::Trace, "Finished reading data from {}", &filename);
                     break;
                 }
                 Err(e) => {
@@ -287,14 +287,14 @@ pub async fn write(
 
         // TODO ERROR HANDLING
         match secret_map_file {
-            Ok(_) => log!(LogLevel::Info, "New secret map created"),
+            Ok(_) => log!(LogLevel::Trace, "New secret map created"),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 // ? Was del_dir incase of regression
                 if let Err(errors) = del_file(secret_path).uf_unwrap() {
                     log!(LogLevel::Error, "{}", errors);
                 };
 
-                log!(LogLevel::Warn, "The json associated with this file id already exists. Nothing has been deleted.");
+                log!(LogLevel::Trace, "RECS: The json associated with this file id already exists. Nothing has been deleted.");
 
                 return uf::new(Err(ErrorArrayItem::from(e)));
             }
@@ -336,7 +336,7 @@ pub async fn write(
 
         return uf::new(Ok((key_data, chunk_count)));
     } else {
-        log!(LogLevel::Warn, "Warning {} doesn't exist", &filename);
+        log!(LogLevel::Trace, "RECS: {} doesn't exist", &filename);
         return uf::new(Err(ErrorArrayItem::new(
             Errors::OpeningFile,
             format!("Warning {} doesn't exist", &filename),
@@ -591,10 +591,10 @@ pub async fn read(
 
         let _ = match unsafe { DEBUGGING } {
             Some(bug) => match bug {
-                true => log!(LogLevel::Info, "{:?}", secret_map),
-                false => log!(LogLevel::Info, "Secret map data received"),
+                true => log!(LogLevel::Trace, "{:?}", secret_map),
+                false => log!(LogLevel::Trace, "Secret map data received"),
             },
-            None => log!(LogLevel::Info, "Secret map data received"),
+            None => log!(LogLevel::Trace, "Secret map data received"),
         };
 
         // ! Validating that we can mess with this data
@@ -850,7 +850,7 @@ pub async fn read(
 
 pub async fn forget(secret_owner: String, secret_name: String) -> Result<(), ErrorArrayItem> {
     // Creating the secret JSON file path
-    log!(LogLevel::Info, "Forgetting secret");
+    log!(LogLevel::Trace, "Forgetting secret");
     let system_paths: SystemPaths = SystemPaths::read_current().await;
     let secret_map_path = PathType::Content(format!(
         "{}/{}-{}.meta",
@@ -887,7 +887,7 @@ pub async fn forget(secret_owner: String, secret_name: String) -> Result<(), Err
 
         // Delete the secret map file
         del_file(secret_map_path.clone()).uf_unwrap()?;
-        log!(LogLevel::Info, "{} has been deleted", &secret_map_path);
+        log!(LogLevel::Trace, "{} has been deleted", &secret_map_path);
 
         Ok(())
     } else {
@@ -917,7 +917,8 @@ fn verify_signature(encoded_buffer: &Vec<u8>, signature: &str, signature_count: 
     let sig_version = truncate(&signature[3..], 6);
 
     if sig_version != VERSION {
-        log!(LogLevel::Warn, "I'll try to read this data but if a can't, get an older version or recs or encore and try again");
+        log!(LogLevel::Trace, "RECS: The version in the data signature isn't my version. I'll try to read it but it may be incompatible");
+        log!(LogLevel::Trace, "RECS: Current version: {}, Packet version: {}", VERSION, sig_version);
     }
 
     let new_hash_data: String = match String::from_utf8(encoded_buffer.to_vec()) {
@@ -932,11 +933,11 @@ fn verify_signature(encoded_buffer: &Vec<u8>, signature: &str, signature_count: 
 
     if sig_hash != new_hash {
         log!(
-            LogLevel::Warn,
+            LogLevel::Trace,
             "A chunk has an invalid signature, Proceeding anyway",
         );
         log!(
-            LogLevel::Warn,
+            LogLevel::Trace,
             "In a later version this will be a fatal error with an option to ignore it",
         );
     };
@@ -951,9 +952,9 @@ fn verify_signature(encoded_buffer: &Vec<u8>, signature: &str, signature_count: 
     };
 
     if sig_count != signature_count {
-        log!(LogLevel::Warn, "The calculated chunk count and the reported chunk count don't align ? continuing anyway -\\:)/- ");
+        log!(LogLevel::Trace, "The calculated chunk count and the reported chunk count don't align ? continuing anyway -\\:)/- ");
         log!(
-            LogLevel::Warn,
+            LogLevel::Trace,
             "In a later version this will be a fatal error with an option to ignore it",
         );
     }
