@@ -290,7 +290,7 @@ pub async fn write(
             Ok(_) => log!(LogLevel::Trace, "New secret map created"),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 // ? Was del_dir incase of regression
-                if let Err(errors) = del_file(secret_path).uf_unwrap() {
+                if let Err(errors) = secret_path.delete() {
                     log!(LogLevel::Error, "{}", errors);
                 };
 
@@ -633,7 +633,7 @@ pub async fn read(
             since_the_epoch.as_secs()
         ));
 
-        if let Err(err) = del_file(tmp_path.clone()).uf_unwrap() {
+        if let Err(err) = del_file(&tmp_path.clone()).uf_unwrap() {
             // this is just manipulating the order of the errors
             log!(LogLevel::Error, "{err}");
         };
@@ -882,11 +882,11 @@ pub async fn forget(secret_owner: String, secret_name: String) -> Result<(), Err
 
         // Check if the secret path exists and delete it
         if secret_map.secret_path.exists() {
-            del_file(secret_map.secret_path).uf_unwrap()?;
+            del_file(&secret_map.secret_path).uf_unwrap()?;
         }
 
         // Delete the secret map file
-        del_file(secret_map_path.clone()).uf_unwrap()?;
+        del_file(&secret_map_path.clone()).uf_unwrap()?;
         log!(LogLevel::Trace, "{} has been deleted", &secret_map_path);
 
         Ok(())

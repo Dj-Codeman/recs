@@ -15,7 +15,7 @@ mod local_env;
 mod secret;
 use dusa_collection_utils::{
     errors::{OkWarning, UnifiedResult as uf},
-    functions::{create_hash, del_file, path_present},
+    functions::{create_hash, path_present},
     log,
     log::LogLevel,
     types::PathType,
@@ -342,7 +342,7 @@ pub async fn update_map(map_num: u32) -> bool {
     };
 
     // write the new map file
-    let _ = del_file(map_path.clone());
+    let _ = map_path.delete();
     let updated_map = serde_json::to_string_pretty(&new_map).unwrap();
 
     let mut map_file = OpenOptions::new()

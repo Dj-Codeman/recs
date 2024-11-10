@@ -3,7 +3,7 @@ use hex;
 // use rand::distributions::{Distribution, Uniform};
 use dusa_collection_utils::{
     errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
-    functions::{create_hash, del_file, path_present},
+    functions::{create_hash, path_present},
     log,
     log::LogLevel,
     types::PathType,
@@ -91,9 +91,8 @@ pub async fn generate_user_key(debug: bool) -> uf<()> {
 
     match path_present(&system_paths.USER_KEY_LOCATION).uf_unwrap() {
         Ok(true) => {
-            let result = del_file(system_paths.USER_KEY_LOCATION.clone()).uf_unwrap();
 
-            match result {
+            match system_paths.USER_KEY_LOCATION.delete() {
                 Ok(_) => {
                     if debug {
                         log!(LogLevel::Trace, "The old userkey has been deleted");
@@ -154,7 +153,7 @@ pub async fn generate_user_key(debug: bool) -> uf<()> {
         PathType::Content(format!("{}/userkey.map", system_paths.MAPS));
 
     // Deleting and recreating the json file
-    if let Err(e) = del_file(userkey_map_path.clone()).uf_unwrap() {
+    if let Err(e) = userkey_map_path.delete() {
         return uf::new(Err(e));
     }
 

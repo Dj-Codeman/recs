@@ -153,7 +153,7 @@ pub async fn index_system_array() -> uf<bool> {
 
                 // Delete existing chunk map file if it exists
                 if chunk_map_path.exists() {
-                    if let Err(err) = del_file(chunk_map_path.clone()).uf_unwrap() {
+                    if let Err(err) = del_file(&chunk_map_path.clone()).uf_unwrap() {
                         return uf::new(Err(err));
                     }
                 }

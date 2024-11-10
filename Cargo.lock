@@ -320,9 +320,9 @@ dependencies = [
 
 [[package]]
 name = "dusa_collection_utils"
-version = "3.0.1"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "477f60f6a5247c762e2f5b53213055d0c0e3dd8f7c11ff12c6a8e97fa16987d8"
+checksum = "14c4fc6fe98a1ce25a607347f8bab92689ef345d06aa69aee474ec8082621cd9"
 dependencies = [
  "block-modes",
  "cfg_rust_features",
@@ -1070,12 +1070,12 @@ dependencies = [
 
 [[package]]
 name = "recs_lib"
-version = "3.0.2"
+version = "3.0.3"
 dependencies = [
  "aes",
  "base64 0.21.7",
  "block-modes",
- "dusa_collection_utils 3.0.1",
+ "dusa_collection_utils 3.0.4",
  "hex",
  "hmac",
  "lazy_static",
