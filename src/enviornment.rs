@@ -1,21 +1,19 @@
 use dusa_collection_utils::{
     errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
-    functions::{make_dir, path_present},
-    log,
+    functions::{del_file, make_dir, path_present},
     log::LogLevel,
+    log,
     rwarc::LockWithTimeout,
     types::PathType,
 };
+use glob::glob;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use sysinfo::{System, SystemExt};
 use tempfile::TempDir;
 
 use crate::{
-    array::{generate_system_array, index_system_array},
-    auth::generate_user_key,
-    config::STREAMING_BUFFER_SIZE,
-    PROGNAME,
+    array::{generate_system_array, index_system_array}, auth::generate_user_key, config::STREAMING_BUFFER_SIZE, PROGNAME
 };
 
 // Static stuff
@@ -154,6 +152,25 @@ async fn make_folders(debug: bool) -> uf<()> {
         Err(e) => return uf::new(Err(e)),
     }
     uf::new(Ok(()))
+}
+
+pub async fn clean_temps() -> Result<(), ErrorArrayItem> {
+    let paths: SystemPaths = SystemPaths::read_current().await;
+    let pattern: String = format!("{}/*.rand", paths.DATA);
+    for file in glob(&pattern)
+        .map_err(|err| ErrorArrayItem::new(Errors::GeneralError, err.msg.to_string()))?
+    {
+        match file {
+            Ok(path) => {
+                if path.is_file() {
+                    log!(LogLevel::Info, "Deleting: {}", path.display());
+                    del_file(&PathType::PathBuf(path)).uf_unwrap()?;
+                }
+            }
+            Err(err) => return Err(ErrorArrayItem::new(Errors::GeneralError, err.to_string())),
+        }
+    }
+    Ok(())
 }
 
 // ! environment as in system

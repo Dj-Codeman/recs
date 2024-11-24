@@ -13,14 +13,14 @@ mod encrypt;
 mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
+use dusa_collection_utils::log;
 use dusa_collection_utils::{
-    errors::{OkWarning, UnifiedResult as uf},
+    errors::{ErrorArrayItem, OkWarning, UnifiedResult as uf},
     functions::{create_hash, path_present},
-    log,
     log::LogLevel,
     types::PathType,
 };
-use local_env::VERSION;
+use local_env::{clean_temps, VERSION};
 use secret::{read_raw, write_raw};
 
 use std::{
@@ -279,6 +279,33 @@ pub async fn encrypt_raw(data: String) -> uf<(String, String, usize)> {
 /// * `uf<OkWarning<Vec<u8>>>` - A unified result containing the decrypted data or an error.
 pub fn decrypt_raw(recs_data: String, recs_key: String, recs_chunks: usize) -> uf<Vec<u8>> {
     read_raw(recs_data, recs_key, recs_chunks)
+}
+
+/// Performs house keeping tasks
+/// cleans the .rand files from raw encrypt requests
+/// re-indexs the system array to ensure valid versions
+/// and signatures.
+/// * Will eventually run tests to ensure chunck count
+/// * logic functions as intended periodically as well
+pub async fn house_keeping() -> Result<(), ErrorArrayItem> {
+    let handle: tokio::task::JoinHandle<Result<(), ErrorArrayItem>> = tokio::spawn(async {
+        clean_temps().await?;
+        ensure_max_map_exists().await.uf_unwrap()?;
+        Ok(())
+    });
+
+    match handle.await {
+        Ok(result) => {
+            match result {
+                Ok(_) => Ok(()),
+                Err(err) => Err(err),
+            }
+        },
+        Err(err) => Err(ErrorArrayItem::new(
+            dusa_collection_utils::errors::Errors::GeneralError,
+            err.to_string(),
+        )),
+    }
 }
 
 /// Updates the map with new data.

@@ -1,6 +1,6 @@
 [package]
 name = "recs_lib"
-version = "3.0.3"
+version = "3.1.0
 edition = "2021"
 authors = ["Darrion <dwhitfield@ramfield.net>"]
 description = "A confusing library for encrypting files and text"
@@ -34,3 +34,5 @@ lazy_static = "1.4.0"
 simple_tmp_logger = "1.2.1"
 dusa_collection_utils = "^3.0.4"
 tempfile = "3.13.0"
+glob = "0.3.1"
+tokio = "1.41.1"

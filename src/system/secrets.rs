@@ -1,3 +1,4 @@
+use dusa_collection_utils::log;
 #[allow(unused_imports)]
 use dusa_collection_utils::{
     errors::{
@@ -7,10 +8,13 @@ use dusa_collection_utils::{
     functions::{create_hash, del_dir, del_file, path_present, truncate},
     types::PathType,
 };
-use dusa_collection_utils::{log, log::LogLevel};
+use dusa_collection_utils::{functions::generate_random_string, log::LogLevel};
 use hex::encode;
 use nix::unistd::{chown, Uid};
-use rand::{distributions::{Distribution, Uniform}, rngs::ThreadRng};
+use rand::{
+    distributions::{Distribution, Uniform},
+    rngs::ThreadRng,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{canonicalize, metadata, read_to_string, File, OpenOptions},
@@ -139,7 +143,10 @@ pub async fn write(
             pretty_data_map,
             match fetch_chunk_helper(1).await.uf_unwrap() {
                 Ok(d) => d.into(),
-                Err(e) => return uf::new(Err(e)),
+                Err(e) => {
+                    log!(LogLevel::Error, "Errot fetching root chunk");
+                    return uf::new(Err(e));
+                }
             },
             1024,
         )
@@ -265,6 +272,7 @@ pub async fn write(
                     break;
                 }
                 Err(e) => {
+                    log!(LogLevel::Error, "Meme");
                     return uf::new(Err(ErrorArrayItem::from(e)));
                 }
             }
@@ -295,7 +303,6 @@ pub async fn write(
                 };
 
                 log!(LogLevel::Trace, "RECS: The json associated with this file id already exists. Nothing has been deleted.");
-
                 return uf::new(Err(ErrorArrayItem::from(e)));
             }
             Err(e) => {
@@ -336,6 +343,7 @@ pub async fn write(
 
         return uf::new(Ok((key_data, chunk_count)));
     } else {
+        log!(LogLevel::Error, "Meme");
         log!(LogLevel::Trace, "RECS: {} doesn't exist", &filename);
         return uf::new(Err(ErrorArrayItem::new(
             Errors::OpeningFile,
@@ -345,12 +353,19 @@ pub async fn write(
 }
 
 pub async fn write_raw(data: Vec<u8>) -> uf<(String, String, usize)> {
-    // Key_Data Cipher_Data Chunk_Count
-    let dummy_path: PathType = PathType::Str("/tmp/dummy.recs".into());
-    let dummy_owner: &str = "owner";
-    let dummy_name: &str = "temp";
+    let rand_str = generate_random_string(20).unwrap();
     // write the data to the file
     let system_paths: SystemPaths = SystemPaths::read_current().await;
+    // Key_Data Cipher_Data Chunk_Count
+    let dummy_path: PathType = PathType::Content(format!(
+        "{}/{}.rand",
+        system_paths.DATA,
+        &rand_str
+    ));
+    let dummy_owner: &str = "system";
+    let dummy_name: &str = &rand_str;
+    // house keeping
+    // clean_temps().await;
 
     // ! making the secret path to append data too
     let mut dummy_file: File = match File::create(dummy_path.clone()) {
@@ -454,7 +469,10 @@ pub async fn write_raw(data: Vec<u8>) -> uf<(String, String, usize)> {
 
             return uf::new(Ok((key, recs_data, count)));
         }
-        Err(e) => return uf::new(Err(e)),
+        Err(e) => {
+            // log!(LogLevel::Error, "fuc");
+            return uf::new(Err(e));
+        }
     }
 }
 
@@ -918,7 +936,12 @@ fn verify_signature(encoded_buffer: &Vec<u8>, signature: &str, signature_count: 
 
     if sig_version != VERSION {
         log!(LogLevel::Trace, "RECS: The version in the data signature isn't my version. I'll try to read it but it may be incompatible");
-        log!(LogLevel::Trace, "RECS: Current version: {}, Packet version: {}", VERSION, sig_version);
+        log!(
+            LogLevel::Trace,
+            "RECS: Current version: {}, Packet version: {}",
+            VERSION,
+            sig_version
+        );
     }
 
     let new_hash_data: String = match String::from_utf8(encoded_buffer.to_vec()) {

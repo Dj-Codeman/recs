@@ -22,7 +22,8 @@ pub const _LEAVE_IN_PEACE: bool = false;
 // chunks the system has to use for cryptographics functions. The higher the
 // size the less likely files are to share a common key.
 
-pub const ARRAY_LEN: u32 = 80963;
+// pub const ARRAY_LEN: u32 = 80963;
+pub const ARRAY_LEN: u32 = 64;
 
 // Will document one day. the underline technology is aes-256-cbc
 // alot of weird descions led to this needing to be defined but
