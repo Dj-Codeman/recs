@@ -470,7 +470,6 @@ pub async fn write_raw(data: Vec<u8>) -> uf<(String, String, usize)> {
             return uf::new(Ok((key, recs_data, count)));
         }
         Err(e) => {
-            // log!(LogLevel::Error, "fuc");
             return uf::new(Err(e));
         }
     }
@@ -617,7 +616,7 @@ pub async fn read(
 
         // ! Validating that we can mess with this data
         if secret_map.version != VERSION {
-            log!(LogLevel::Warn, "The data is from an older version of recs. I'm going to try to read it regardless, in the future this will be a fatal error with the option to ignore it");
+            log!(LogLevel::Trace, "The data is from an older version of recs. I'm going to try to read it regardless, in the future this will be a fatal error with the option to ignore it");
         }
 
         // Creating a temp filename to write the data too so we can change the owner and
@@ -858,7 +857,6 @@ pub async fn read(
         // moving to the right dir
         // secret_map.file_path
     } else {
-        log!(LogLevel::Warn, "The secret map don't exist");
         return uf::new(Err(ErrorArrayItem::new(
             Errors::InvalidMapData,
             String::from("The secret map does not exist"),
@@ -966,11 +964,11 @@ fn verify_signature(encoded_buffer: &Vec<u8>, signature: &str, signature_count: 
     };
 
     // TODO change the parsing to read the actual number from the signature
-    let sig_count = match signature[31..].parse::<usize>() {
+    let sig_count = match signature[30..].parse::<usize>() {
         Ok(d) => d,
         Err(e) => {
             log!(LogLevel::Error, "{}", ErrorArrayItem::from(e));
-            01
+            1
         }
     };
 

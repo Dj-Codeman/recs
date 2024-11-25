@@ -93,7 +93,7 @@ pub async fn initialize(temporary_path: bool) -> uf<()> {
         false => false,
     };
 
-    log!(LogLevel::Info, "RECS started");
+    log!(LogLevel::Trace, "RECS started");
 
     SystemPaths::set_current(temporary_path).await;
 
@@ -126,7 +126,7 @@ async fn ensure_system_path(debug: bool) -> uf<()> {
         Ok(true) => (),
         Ok(false) => {
             log!(
-                LogLevel::Info,
+                LogLevel::Trace,
                 "System array file does not exist, reinitialize recs"
             );
             if let Err(e) = set_system(debug).await.uf_unwrap() {

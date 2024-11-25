@@ -163,7 +163,7 @@ pub async fn clean_temps() -> Result<(), ErrorArrayItem> {
         match file {
             Ok(path) => {
                 if path.is_file() {
-                    log!(LogLevel::Info, "Deleting: {}", path.display());
+                    log!(LogLevel::Debug, "RECS: Deleting: {}", path.display());
                     del_file(&PathType::PathBuf(path)).uf_unwrap()?;
                 }
             }
