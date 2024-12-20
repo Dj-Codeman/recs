@@ -14,6 +14,7 @@ mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
 use dusa_collection_utils::log;
+use dusa_collection_utils::stringy::Stringy;
 use dusa_collection_utils::{
     errors::{ErrorArrayItem, OkWarning, UnifiedResult as uf},
     functions::{create_hash, path_present},
@@ -343,7 +344,7 @@ pub async fn update_map(map_num: u32) -> bool {
         Err(_) => (false, None),
     };
 
-    let new_hash: Option<String> = match chunk_data {
+    let new_hash: Option<Stringy> = match chunk_data {
         (true, None) => None,
         (true, Some(chunk)) => Some(create_hash(chunk)),
         (false, None) => None,

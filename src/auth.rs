@@ -2,11 +2,7 @@ use hex;
 
 // use rand::distributions::{Distribution, Uniform};
 use dusa_collection_utils::{
-    errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
-    functions::{create_hash, path_present},
-    log,
-    log::LogLevel,
-    types::PathType,
+    errors::{ErrorArrayItem, Errors, UnifiedResult as uf}, functions::{create_hash, path_present}, log::LogLevel, log, stringy::Stringy, types::PathType
 };
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
@@ -30,10 +26,10 @@ static PBKDF2_WRITING_ALG: pbkdf2::Algorithm = pbkdf2::PBKDF2_HMAC_SHA512;
 // ! ALL KEYS FOLLOW THIS STRUCT
 #[derive(Serialize, Deserialize, Debug)]
 pub struct KeyIndex {
-    pub hash: String,
-    pub parent: String, // Default master or userkey
-    pub location: String,
-    pub version: String,
+    pub hash: Stringy,
+    pub parent: Stringy, // Default master or userkey
+    pub location: Stringy,
+    pub version: Stringy,
     pub key: u32,
 }
 
@@ -138,10 +134,10 @@ pub async fn generate_user_key(debug: bool) -> uf<()> {
 
     // populated all the created data
     let userkey_map_data: KeyIndex = KeyIndex {
-        hash: String::from(checksum_string),
-        parent: String::from("SELF"),
-        version: String::from(VERSION),
-        location: (&system_paths.USER_KEY_LOCATION).to_string(),
+        hash: checksum_string,
+        parent: Stringy::from("SELF"),
+        version: Stringy::from(VERSION),
+        location: (&system_paths.USER_KEY_LOCATION).to_string().into(),
         key: 0,
     };
 
@@ -231,15 +227,15 @@ pub async fn auth_user_key() -> uf<String> {
     let userkey = hex::encode(&password_key);
     let secret: String = "The hotdog man isn't real !?".to_string();
     // ! make the read the userkey from the map in the future
-    let verification_ciphertext: String = match read_to_string(&system_paths.USER_KEY_LOCATION) {
-        Ok(d) => d,
+    let verification_ciphertext: Stringy = match read_to_string(&system_paths.USER_KEY_LOCATION) {
+        Ok(d) => Stringy::from(d),
         Err(e) => {
             return uf::new(Err(ErrorArrayItem::from(e)));
         }
     };
 
     let verification_result: String =
-        match decrypt(&verification_ciphertext.to_string(), &userkey).uf_unwrap() {
+        match decrypt(verification_ciphertext, &userkey).uf_unwrap() {
             Ok(d) => String::from_utf8_lossy(&d).to_string(),
             Err(e) => return uf::new(Err(e)),
         };

@@ -1,4 +1,4 @@
-use dusa_collection_utils::log;
+use dusa_collection_utils::{log, stringy::Stringy};
 #[allow(unused_imports)]
 use dusa_collection_utils::{
     errors::{
@@ -43,7 +43,7 @@ struct SecretDataIndex {
     secret_path: PathType,
     buffer_size: usize,
     chunk_count: usize,
-    full_file_hash: String,
+    full_file_hash: Stringy,
 }
 
 pub async fn write(
@@ -99,7 +99,7 @@ pub async fn write(
 
         // creating the rest of the struct data
         let unique_id: String =
-            truncate(&encode(create_hash(filename.to_string())), 20).to_string();
+            truncate(&encode(create_hash(filename.to_string()).to_string()), 20).to_string();
 
         let canon_path: PathType = match canonicalize(&filename) {
             Ok(d) => PathType::PathBuf(d),
@@ -116,7 +116,7 @@ pub async fn write(
         let chunk_count: usize = file_size as usize / buffer_size;
 
         // make a hash
-        let full_file_hash: String = create_hash(filename.to_string());
+        let full_file_hash: Stringy = create_hash(filename.to_string());
 
         // Creating the struct
         let secret_data_struct: SecretDataIndex = SecretDataIndex {
@@ -214,7 +214,7 @@ pub async fn write(
                         "{}-{}-{}-{}",
                         padding_count(signature_count), // Fix for single digit signature count
                         VERSION,
-                        truncate(&create_hash(encoded_buffer.clone()), 20),
+                        truncate(&*create_hash(encoded_buffer.clone()), 20),
                         signature_count
                     );
 
@@ -422,7 +422,7 @@ pub async fn write_raw(data: Vec<u8>) -> uf<(String, String, usize)> {
                 }
             };
 
-            let secret_map_data: Vec<u8> = match decrypt(&cipher_map_data, &key_data).uf_unwrap() {
+            let secret_map_data: Vec<u8> = match decrypt((&cipher_map_data).into(), &key_data).uf_unwrap() {
                 Ok(d) => d,
                 Err(e) => {
                     return uf::new(Err(e));
@@ -499,7 +499,7 @@ pub fn read_raw(data: String, key: String, chunks: usize) -> uf<Vec<u8>> {
         // ! handling the file reading and outputs
         while range_start < data.len() {
             let chunk: &str = &data[range_start..range_end];
-            let secret_buffer: String = match std::str::from_utf8(chunk.as_bytes()) {
+            let mut secret_buffer: String = match std::str::from_utf8(chunk.as_bytes()) {
                 // This function is reading the hex data from the file, It SHOULD be a string
                 Ok(s) => s.to_owned(),
                 Err(e) => {
@@ -508,12 +508,12 @@ pub fn read_raw(data: String, key: String, chunks: usize) -> uf<Vec<u8>> {
             };
 
             // take the first splinting chunk into signature and cipher data
-            let encoded_signature: &str = truncate(&secret_buffer, 62);
+            let encoded_signature: &str = &truncate(&secret_buffer, 62);
             // ! When this inevitably fails, Remember the paddingcount() changes the sig length.
-            let cipher_buffer: &str = &secret_buffer[62..]; // * this is the encrypted hex encoded bytes
+            let cipher_buffer: Stringy = Stringy::from(&*&mut secret_buffer[62..]); // * this is the encrypted hex encoded bytes
 
             // * decrypting the chunk
-            let mut decrypted_data: Vec<u8> = match decrypt(&cipher_buffer, &key).uf_unwrap() {
+            let mut decrypted_data: Vec<u8> = match decrypt(cipher_buffer, &key).uf_unwrap() {
                 Ok(d) => d, // TODO find a more efficient way to do this
                 Err(e) => return uf::new(Err(e)),
             };
@@ -595,7 +595,7 @@ pub async fn read(
             Err(e) => return uf::new(Err(e)),
         };
 
-        let secret_map_data = match decrypt(&cipher_map_data, &key_data).uf_unwrap() {
+        let secret_map_data = match decrypt((&cipher_map_data).into(), &key_data).uf_unwrap() {
             Ok(d) => d,
             Err(e) => return uf::new(Err(e)),
         };
@@ -621,11 +621,11 @@ pub async fn read(
 
         // Creating a temp filename to write the data too so we can change the owner and
         // ensure the data is there
-        let temp_name: String = match path_present(&secret_map.secret_path).uf_unwrap() {
+        let temp_name: Stringy = match path_present(&secret_map.secret_path).uf_unwrap() {
             Ok(b) => match b {
                 // This ensure the tmp path are more likely to be unique
                 true => {
-                    truncate(&create_hash(secret_map.secret_path.to_string())[5..], 10).to_owned()
+                    truncate(&create_hash(secret_map.secret_path.to_string())[5..], 10)
                 }
                 false => {
                     return uf::new(Err(ErrorArrayItem::new(
@@ -736,7 +736,7 @@ pub async fn read(
             // ! handeling the file reading and outputs
             match file.read_exact(&mut buffer) {
                 Ok(_) => {
-                    let secret_buffer = match std::str::from_utf8(&buffer) {
+                    let mut secret_buffer = match std::str::from_utf8(&buffer) {
                         Ok(s) => s.to_owned(),
                         Err(e) => {
                             return uf::new(Err(ErrorArrayItem::from(e)));
@@ -744,12 +744,12 @@ pub async fn read(
                     };
 
                     // take the first spliiting chunk into signature and cipher data
-                    let encoded_signature: &str = truncate(&secret_buffer, 62); // 61 + how ever big the chunk count is
-                    let cipher_buffer: &str = &secret_buffer[62..];
+                    let encoded_signature: Stringy = truncate(&secret_buffer, 62); // 61 + how ever big the chunk count is
+                    let cipher_buffer: Stringy = Stringy::from(&*&mut secret_buffer[62..]);
 
                     // * decrypting the chunk
                     let mut decrypted_data: Vec<u8> =
-                        match decrypt(&cipher_buffer, &writing_key).uf_unwrap() {
+                        match decrypt(cipher_buffer, &writing_key).uf_unwrap() {
                             Ok(d) => d,
                             Err(e) => return uf::new(Err(e)),
                         };
@@ -758,7 +758,7 @@ pub async fn read(
 
                     // * handeling decoding the signature
                     let signature_utf8: Result<String, std::string::FromUtf8Error> =
-                        String::from_utf8(match hex::decode(encoded_signature) {
+                        String::from_utf8(match hex::decode(encoded_signature.to_string()) {
                             Ok(d) => d,
                             Err(e) => {
                                 let mut errors = ErrorArray::new_container();
@@ -883,7 +883,7 @@ pub async fn forget(secret_owner: String, secret_name: String) -> Result<(), Err
         let key_data = fetch_chunk_helper(1).await.uf_unwrap()?;
 
         // Decrypt the secret map data
-        let secret_map_data = decrypt(&cipher_map_data, &key_data)
+        let secret_map_data = decrypt((&cipher_map_data).into(), &key_data)
             .uf_unwrap()
             .map_err(|e| e)?;
 
@@ -928,11 +928,11 @@ async fn fetch_chunk_helper(num: u32) -> uf<String> {
 }
 
 fn verify_signature(encoded_buffer: &Vec<u8>, signature: &str, signature_count: usize) -> uf<()> {
-    let _sig_digit_count = truncate(&signature, 2); // remember it exists
+    let _sig_digit_count = truncate(&*signature, 2); // remember it exists
 
     let sig_version = truncate(&signature[3..], 6);
 
-    if sig_version != VERSION {
+    if sig_version != VERSION.into() {
         log!(LogLevel::Trace, "RECS: The version in the data signature isn't my version. I'll try to read it but it may be incompatible");
         log!(
             LogLevel::Trace,
@@ -949,8 +949,8 @@ fn verify_signature(encoded_buffer: &Vec<u8>, signature: &str, signature_count: 
         }
     };
     // pulling the hash from the signature
-    let sig_hash: String = truncate(&signature[10..], 20).to_owned();
-    let new_hash: String = truncate(&create_hash(new_hash_data.clone()), 20).to_owned();
+    let sig_hash: Stringy = truncate(&signature[10..], 20).to_owned();
+    let new_hash: Stringy = truncate(&*create_hash(new_hash_data.clone()), 20).to_owned();
 
     if sig_hash != new_hash {
         log!(

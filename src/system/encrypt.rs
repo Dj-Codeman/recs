@@ -27,18 +27,18 @@ pub fn create_secure_chunk() -> Stringy {
         .take(ARRAY_LEN as usize)
         .map(char::from)
         .collect();
-    return Stringy::from_string(key);
+    return Stringy::from(key);
 }
 
 fn create_iv() -> Stringy {
     // Generating initial vector
-    let initial_vector = Stringy::from_string(
-        rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(16)
-            .map(char::from)
-            .collect(),
-    );
+    let bytes: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(16)
+        .map(char::from)
+        .collect();
+    
+    let initial_vector = Stringy::from(bytes);
 
     return initial_vector;
 }
@@ -116,19 +116,19 @@ pub fn encrypt(data: Vec<u8>, key: Vec<u8>, buffer_size: usize) -> uf<String> {
     uf::new(Ok(cipherdata))
 }
 
-pub fn decrypt(cipherdata: &str, key: &str) -> uf<Vec<u8>> {
+pub fn decrypt(cipherdata: Stringy, key: &str) -> uf<Vec<u8>> {
     // Calculate the length of cipherdata minus the HMAC
     let cipherdata_len: usize = cipherdata.len() - 64;
 
     // Remove the HMAC from the cipherdata
-    let cipherdata_hmacless: &str = truncate(&cipherdata, cipherdata_len);
+    let cipherdata_hmacless: Stringy = truncate(&*cipherdata, cipherdata_len);
 
     // Get old and new HMAC values
-    let old_hmac: String = cipherdata
+    let old_hmac: Stringy = cipherdata
         .substring(cipherdata_len, cipherdata_len + 64)
-        .to_owned();
+        .into();
 
-    let new_hmac: String = match create_hmac(cipherdata_hmacless, key) {
+    let new_hmac: Stringy = match create_hmac(&cipherdata_hmacless, key) {
         Ok(d) => d,
         Err(e) => {
             return uf::new(Err(e));
@@ -152,10 +152,10 @@ pub fn decrypt(cipherdata: &str, key: &str) -> uf<Vec<u8>> {
             .map_err(|e| ErrorArrayItem::from(e));
 
     // Extract ciphertext and decode from hex
-    let encoded_ciphertext: &str = truncate(&cipherdata, cipherdata_len - 16);
+    let encoded_ciphertext: Stringy = truncate(&*cipherdata, cipherdata_len - 16);
 
     let decoded_ciphertext_result: Result<Vec<u8>, ErrorArrayItem> =
-        hex::decode(encoded_ciphertext)
+        hex::decode(encoded_ciphertext.to_string())
             .map_err(|e| ErrorArrayItem::new(Errors::InvalidHexData, e.to_string()));
 
     // Decrypt the data
@@ -179,7 +179,7 @@ pub fn decrypt(cipherdata: &str, key: &str) -> uf<Vec<u8>> {
     }
 }
 
-fn create_hmac(cipherdata: &str, derive_key: &str) -> Result<String, ErrorArrayItem> {
+fn create_hmac(cipherdata: &str, derive_key: &str) -> Result<Stringy, ErrorArrayItem> {
     type HmacSha256 = Hmac<Sha256>;
 
     // When the HMAC is verified we check against the system key

@@ -25,7 +25,7 @@ pub struct ChunkMap {
     pub location: PathType,
     pub version: String,
     pub chunk_num: u32,
-    pub chunk_hsh: String,
+    pub chunk_hsh: Stringy,
     pub chunk_beg: u32,
     pub chunk_end: u32,
 }
@@ -73,7 +73,7 @@ fn create_system_array_contents() -> Stringy {
 
     let system_array_footer = "\n</--REcS Array-->";
 
-    Stringy::from_string(format!(
+    Stringy::from(format!(
         "{}{}{}",
         system_array_header, system_array_chunk, system_array_footer
     ))
@@ -136,7 +136,7 @@ pub async fn index_system_array() -> uf<bool> {
         match file.read_exact(&mut buffer) {
             Ok(_) => {
                 let chunk: String = buffer.iter().map(|byte| format!("{:02X}", byte)).collect();
-                let chunk_hash = create_hash(chunk);
+                let chunk_hash: Stringy = create_hash(chunk);
 
                 let chunk_map = ChunkMap {
                     location: system_paths.SYSTEM_ARRAY_LOCATION.clone(),
