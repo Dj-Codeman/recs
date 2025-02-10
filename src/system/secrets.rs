@@ -7,7 +7,7 @@ use dusa_collection_utils::{
     },
     functions::{create_hash, del_dir, del_file, path_present, truncate},
 };
-use dusa_collection_utils::{functions::generate_random_string};
+use dusa_collection_utils::functions::generate_random_string;
 use hex::encode;
 use nix::unistd::{chown, Uid};
 use rand::{
