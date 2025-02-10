@@ -1,4 +1,4 @@
-use dusa_collection_utils::{log, stringy::Stringy};
+use dusa_collection_utils::{log, logger::LogLevel, types::{pathtype::PathType, stringy::Stringy}};
 #[allow(unused_imports)]
 use dusa_collection_utils::{
     errors::{
@@ -6,9 +6,8 @@ use dusa_collection_utils::{
         WarningArrayItem, Warnings,
     },
     functions::{create_hash, del_dir, del_file, path_present, truncate},
-    types::PathType,
 };
-use dusa_collection_utils::{functions::generate_random_string, log::LogLevel};
+use dusa_collection_utils::{functions::generate_random_string};
 use hex::encode;
 use nix::unistd::{chown, Uid};
 use rand::{

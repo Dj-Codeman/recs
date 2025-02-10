@@ -1,10 +1,5 @@
 use dusa_collection_utils::{
-    errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
-    functions::{del_file, make_dir, path_present},
-    log::LogLevel,
-    log,
-    rwarc::LockWithTimeout,
-    types::PathType,
+    errors::{ErrorArrayItem, Errors, UnifiedResult as uf}, functions::{del_file, make_dir, path_present}, log, logger::LogLevel, types::{pathtype::PathType, rwarc::LockWithTimeout}
 };
 use glob::glob;
 use lazy_static::lazy_static;

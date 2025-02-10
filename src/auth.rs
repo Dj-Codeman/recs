@@ -2,7 +2,7 @@ use hex;
 
 // use rand::distributions::{Distribution, Uniform};
 use dusa_collection_utils::{
-    errors::{ErrorArrayItem, Errors, UnifiedResult as uf}, functions::{create_hash, path_present}, log::LogLevel, log, stringy::Stringy, types::PathType
+    errors::{ErrorArrayItem, Errors, UnifiedResult as uf}, functions::{create_hash, path_present}, log, logger::LogLevel, types::{pathtype::PathType, stringy::Stringy}
 };
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};

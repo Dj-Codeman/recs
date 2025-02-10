@@ -320,9 +320,9 @@ dependencies = [
 
 [[package]]
 name = "dusa_collection_utils"
-version = "3.1.0"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e7fbccacab4c9bd52885cd15720588f13a5ee66db8307549aa074a3205531c2"
+checksum = "8db199a091f9d35836222a2e3487d1dd2f65b33dd22b65547f1bbc6c8ffbded6"
 dependencies = [
  "block-modes",
  "cfg_rust_features",
@@ -339,7 +339,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2",
- "simple_pretty",
  "tar",
  "tempfile",
  "tokio",
@@ -1073,7 +1072,7 @@ dependencies = [
  "aes",
  "base64 0.21.7",
  "block-modes",
- "dusa_collection_utils 3.1.0",
+ "dusa_collection_utils 3.2.0",
  "glob",
  "hex",
  "hmac",
