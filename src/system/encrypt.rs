@@ -1,7 +1,11 @@
 use aes::Aes256;
 use block_modes::{block_padding::Pkcs7, BlockMode, Cbc};
 use dusa_collection_utils::{
-    errors::{ErrorArrayItem, Errors, UnifiedResult as uf}, functions::truncate, log, logger::LogLevel, types::stringy::Stringy
+    core::errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
+    core::logger::LogLevel,
+    core::types::stringy::Stringy,
+    log,
+    platform::functions::truncate,
 };
 use hex::{self, encode};
 use hmac::{Hmac, Mac};
@@ -33,7 +37,7 @@ fn create_iv() -> Stringy {
         .take(16)
         .map(char::from)
         .collect();
-    
+
     let initial_vector = Stringy::from(bytes);
 
     return initial_vector;

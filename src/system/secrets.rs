@@ -1,13 +1,17 @@
-use dusa_collection_utils::{log, logger::LogLevel, types::{pathtype::PathType, stringy::Stringy}};
+use dusa_collection_utils::platform::functions::generate_random_string;
 #[allow(unused_imports)]
 use dusa_collection_utils::{
-    errors::{
+    core::errors::{
         ErrorArray, ErrorArrayItem, Errors, OkWarning, UnifiedResult as uf, WarningArray,
         WarningArrayItem, Warnings,
     },
-    functions::{create_hash, del_dir, del_file, path_present, truncate},
+    platform::functions::{create_hash, del_dir, del_file, path_present, truncate},
 };
-use dusa_collection_utils::functions::generate_random_string;
+use dusa_collection_utils::{
+    core::logger::LogLevel,
+    core::types::{pathtype::PathType, stringy::Stringy},
+    log,
+};
 use hex::encode;
 use nix::unistd::{chown, Uid};
 use rand::{
@@ -356,11 +360,8 @@ pub async fn write_raw(data: Vec<u8>) -> uf<(String, String, usize)> {
     // write the data to the file
     let system_paths: SystemPaths = SystemPaths::read_current().await;
     // Key_Data Cipher_Data Chunk_Count
-    let dummy_path: PathType = PathType::Content(format!(
-        "{}/{}.rand",
-        system_paths.DATA,
-        &rand_str
-    ));
+    let dummy_path: PathType =
+        PathType::Content(format!("{}/{}.rand", system_paths.DATA, &rand_str));
     let dummy_owner: &str = "system";
     let dummy_name: &str = &rand_str;
     // house keeping
@@ -421,12 +422,13 @@ pub async fn write_raw(data: Vec<u8>) -> uf<(String, String, usize)> {
                 }
             };
 
-            let secret_map_data: Vec<u8> = match decrypt((&cipher_map_data).into(), &key_data).uf_unwrap() {
-                Ok(d) => d,
-                Err(e) => {
-                    return uf::new(Err(e));
-                }
-            };
+            let secret_map_data: Vec<u8> =
+                match decrypt((&cipher_map_data).into(), &key_data).uf_unwrap() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        return uf::new(Err(e));
+                    }
+                };
             let secret_map: SecretDataIndex =
                 match serde_json::from_str(&String::from_utf8_lossy(&secret_map_data)) {
                     Ok(d) => d,
@@ -623,9 +625,7 @@ pub async fn read(
         let temp_name: Stringy = match path_present(&secret_map.secret_path).uf_unwrap() {
             Ok(b) => match b {
                 // This ensure the tmp path are more likely to be unique
-                true => {
-                    truncate(&create_hash(secret_map.secret_path.to_string())[5..], 10)
-                }
+                true => truncate(&create_hash(secret_map.secret_path.to_string())[5..], 10),
                 false => {
                     return uf::new(Err(ErrorArrayItem::new(
                         Errors::InvalidFile,

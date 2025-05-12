@@ -2,7 +2,11 @@ use hex;
 
 // use rand::distributions::{Distribution, Uniform};
 use dusa_collection_utils::{
-    errors::{ErrorArrayItem, Errors, UnifiedResult as uf}, functions::{create_hash, path_present}, log, logger::LogLevel, types::{pathtype::PathType, stringy::Stringy}
+    core::errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
+    core::logger::LogLevel,
+    core::types::{pathtype::PathType, stringy::Stringy},
+    log,
+    platform::functions::{create_hash, path_present},
 };
 use ring::pbkdf2;
 use serde::{Deserialize, Serialize};
@@ -86,17 +90,14 @@ pub async fn generate_user_key(debug: bool) -> uf<()> {
     let system_paths: SystemPaths = SystemPaths::read_current().await;
 
     match path_present(&system_paths.USER_KEY_LOCATION).uf_unwrap() {
-        Ok(true) => {
-
-            match system_paths.USER_KEY_LOCATION.delete() {
-                Ok(_) => {
-                    if debug {
-                        log!(LogLevel::Trace, "The old userkey has been deleted");
-                    }
+        Ok(true) => match system_paths.USER_KEY_LOCATION.delete() {
+            Ok(_) => {
+                if debug {
+                    log!(LogLevel::Trace, "The old userkey has been deleted");
                 }
-                Err(e) => return uf::new(Err(e)),
             }
-        }
+            Err(e) => return uf::new(Err(e)),
+        },
         Ok(false) => (),
         Err(e) => return uf::new(Err(e)),
     }
@@ -234,11 +235,10 @@ pub async fn auth_user_key() -> uf<String> {
         }
     };
 
-    let verification_result: String =
-        match decrypt(verification_ciphertext, &userkey).uf_unwrap() {
-            Ok(d) => String::from_utf8_lossy(&d).to_string(),
-            Err(e) => return uf::new(Err(e)),
-        };
+    let verification_result: String = match decrypt(verification_ciphertext, &userkey).uf_unwrap() {
+        Ok(d) => String::from_utf8_lossy(&d).to_string(),
+        Err(e) => return uf::new(Err(e)),
+    };
 
     match verification_result == secret {
         true => return uf::new(Ok(userkey)),

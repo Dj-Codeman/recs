@@ -14,12 +14,12 @@ mod local_env;
 #[path = "system/secrets.rs"]
 mod secret;
 use dusa_collection_utils::log;
-use dusa_collection_utils::logger::LogLevel;
-use dusa_collection_utils::types::pathtype::PathType;
-use dusa_collection_utils::types::stringy::Stringy;
+use dusa_collection_utils::core::logger::LogLevel;
+use dusa_collection_utils::core::types::pathtype::PathType;
+use dusa_collection_utils::core::types::stringy::Stringy;
 use dusa_collection_utils::{
-    errors::{ErrorArrayItem, OkWarning, UnifiedResult as uf},
-    functions::{create_hash, path_present},
+    core::errors::{ErrorArrayItem, OkWarning, UnifiedResult as uf},
+    platform::functions::{create_hash, path_present},
 };
 use local_env::{clean_temps, VERSION};
 use secret::{read_raw, write_raw};
@@ -303,7 +303,7 @@ pub async fn house_keeping() -> Result<(), ErrorArrayItem> {
             }
         },
         Err(err) => Err(ErrorArrayItem::new(
-            dusa_collection_utils::errors::Errors::GeneralError,
+            dusa_collection_utils::core::errors::Errors::GeneralError,
             err.to_string(),
         )),
     }

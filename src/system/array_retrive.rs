@@ -1,8 +1,8 @@
-use dusa_collection_utils::errors::{ErrorArrayItem, Errors, UnifiedResult as uf};
-use dusa_collection_utils::functions::create_hash;
+use dusa_collection_utils::core::errors::{ErrorArrayItem, Errors, UnifiedResult as uf};
+use dusa_collection_utils::platform::functions::create_hash;
 use dusa_collection_utils::log;
-use dusa_collection_utils::logger::LogLevel;
-use dusa_collection_utils::types::pathtype::PathType;
+use dusa_collection_utils::core::logger::LogLevel;
+use dusa_collection_utils::core::types::pathtype::PathType;
 use rand::distributions::{Distribution, Uniform};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};

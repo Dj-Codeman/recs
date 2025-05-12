@@ -1,5 +1,9 @@
 use dusa_collection_utils::{
-    errors::{ErrorArrayItem, Errors, UnifiedResult as uf}, functions::{create_hash, del_dir, del_file}, log, logger::LogLevel, types::{pathtype::PathType, stringy::Stringy}
+    core::errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
+    core::logger::LogLevel,
+    core::types::{pathtype::PathType, stringy::Stringy},
+    log,
+    platform::functions::{create_hash, del_dir, del_file},
 };
 
 use serde::{Deserialize, Serialize};
@@ -170,7 +174,6 @@ pub async fn index_system_array() -> uf<bool> {
                 {
                     return uf::new(Err(ErrorArrayItem::from(e)));
                 }
-
             }
             Err(_) => break, // Break the loop on read error (EOF or other issue)
         }

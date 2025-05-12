@@ -1,5 +1,9 @@
 use dusa_collection_utils::{
-    errors::{ErrorArrayItem, Errors, UnifiedResult as uf}, functions::{del_file, make_dir, path_present}, log, logger::LogLevel, types::{pathtype::PathType, rwarc::LockWithTimeout}
+    core::errors::{ErrorArrayItem, Errors, UnifiedResult as uf},
+    core::logger::LogLevel,
+    core::types::{pathtype::PathType, rwarc::LockWithTimeout},
+    log,
+    platform::functions::{del_file, make_dir, path_present},
 };
 use glob::glob;
 use lazy_static::lazy_static;
@@ -8,7 +12,10 @@ use sysinfo::{System, SystemExt};
 use tempfile::TempDir;
 
 use crate::{
-    array::{generate_system_array, index_system_array}, auth::generate_user_key, config::STREAMING_BUFFER_SIZE, PROGNAME
+    array::{generate_system_array, index_system_array},
+    auth::generate_user_key,
+    config::STREAMING_BUFFER_SIZE,
+    PROGNAME,
 };
 
 // Static stuff
